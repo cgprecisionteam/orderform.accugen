@@ -1,0 +1,15 @@
+# Next.js
+.next/
+out/
+node_modules/
+
+# Firebase
+functions/lib/
+functions/node_modules/
+
+# Environment
+.env.local
+.env
+
+# OS
+.DS_Store

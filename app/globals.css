@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Force white background — ignore system dark mode */
+html,
+body {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
