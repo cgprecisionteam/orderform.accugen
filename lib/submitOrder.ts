@@ -1,5 +1,4 @@
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from './firebase';
+import { uploadFiles } from './uploadthing-client';
 
 export interface OrderFile {
   url: string;
@@ -26,23 +25,20 @@ export interface OrderPayload {
 }
 
 export async function submitOrder(payload: OrderPayload): Promise<string> {
-  // Step 1 — Upload files to Storage using a temporary ID.
-  // The Cloud Function will use the real requestId when saving.
-  const tempId = `tmp-${Date.now()}`;
-  const uploadedFiles: OrderFile[] = [];
+  // Step 1 — Upload files to UploadThing CDN
+  let uploadedFiles: OrderFile[] = [];
 
-  for (const file of payload.files) {
-    const storageRef = ref(storage, `orders/${tempId}/files/${file.name}`);
-    await uploadBytes(storageRef, file);
-    const url = await getDownloadURL(storageRef);
-    uploadedFiles.push({ url, name: file.name, size: file.size });
+  if (payload.files.length > 0) {
+    const results = await uploadFiles('orderFiles', { files: payload.files });
+    uploadedFiles = results.map((r) => ({
+      url: r.url,
+      name: r.name,
+      size: r.size,
+    }));
   }
 
-  // Step 2 — POST to Cloud Function with form data + uploaded file metadata.
-  const functionUrl = process.env.NEXT_PUBLIC_CREATE_ORDER_URL;
-  if (!functionUrl) throw new Error('NEXT_PUBLIC_CREATE_ORDER_URL is not set');
-
-  const response = await fetch(functionUrl, {
+  // Step 2 — POST order data + file URLs to Next.js API route
+  const response = await fetch('/api/order', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
