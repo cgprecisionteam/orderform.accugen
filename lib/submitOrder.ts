@@ -1,7 +1,5 @@
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from './firebase';
-import { generateRequestId } from './requestId';
+import { storage } from './firebase';
 
 export interface OrderFile {
   url: string;
@@ -28,38 +26,49 @@ export interface OrderPayload {
 }
 
 export async function submitOrder(payload: OrderPayload): Promise<string> {
-  const requestId = await generateRequestId();
-
-  // Upload files to Firebase Storage
+  // Step 1 — Upload files to Storage using a temporary ID.
+  // The Cloud Function will use the real requestId when saving.
+  const tempId = `tmp-${Date.now()}`;
   const uploadedFiles: OrderFile[] = [];
+
   for (const file of payload.files) {
-    const storageRef = ref(storage, `orders/${requestId}/files/${file.name}`);
+    const storageRef = ref(storage, `orders/${tempId}/files/${file.name}`);
     await uploadBytes(storageRef, file);
     const url = await getDownloadURL(storageRef);
     uploadedFiles.push({ url, name: file.name, size: file.size });
   }
 
-  // Save order document to Firestore
-  await addDoc(collection(db, 'orders'), {
-    requestId,
-    clinicName: payload.clinicName,
-    email: payload.email,
-    contactName: payload.contactName,
-    contactNumber: payload.contactNumber,
-    patientName: payload.patientName,
-    category: payload.category,
-    product: payload.product,
-    toothNumbers: payload.toothNumbers,
-    isBridge: payload.isBridge,
-    shade: payload.shade,
-    implantNotes: payload.implantNotes,
-    generalInstructions: payload.generalInstructions,
-    deliveryDate: payload.deliveryDate,
-    isRush: payload.isRush,
-    files: uploadedFiles,
-    status: 'NEW',
-    createdAt: serverTimestamp(),
+  // Step 2 — POST to Cloud Function with form data + uploaded file metadata.
+  const functionUrl = process.env.NEXT_PUBLIC_CREATE_ORDER_URL;
+  if (!functionUrl) throw new Error('NEXT_PUBLIC_CREATE_ORDER_URL is not set');
+
+  const response = await fetch(functionUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      clinicName: payload.clinicName,
+      email: payload.email,
+      contactName: payload.contactName,
+      contactNumber: payload.contactNumber,
+      patientName: payload.patientName,
+      category: payload.category,
+      product: payload.product,
+      toothNumbers: payload.toothNumbers,
+      isBridge: payload.isBridge,
+      shade: payload.shade,
+      implantNotes: payload.implantNotes,
+      generalInstructions: payload.generalInstructions,
+      deliveryDate: payload.deliveryDate,
+      isRush: payload.isRush,
+      files: uploadedFiles,
+    }),
   });
 
-  return requestId;
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Order submission failed: ${text}`);
+  }
+
+  const json = (await response.json()) as { success: boolean; requestId: string };
+  return json.requestId;
 }

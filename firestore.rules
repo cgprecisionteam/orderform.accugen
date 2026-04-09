@@ -2,15 +2,16 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Orders — public write (no auth required), no public read
+    // Orders — public write (no auth required), no public read.
     match /orders/{orderId} {
       allow create: if true;
       allow read, update, delete: if false;
     }
 
-    // Counter — public read + write needed for atomic increment
-    match /counters/orders {
-      allow read, write: if true;
+    // Counter — read/write only from server (Admin SDK bypasses rules).
+    // Denying all client access prevents counter tampering from the browser.
+    match /counters/{doc} {
+      allow read, write: if false;
     }
   }
 }

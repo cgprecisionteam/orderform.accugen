@@ -2,14 +2,14 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // Orders folder — allow public write (upload), no public read
-    // Signed download URLs generated server-side are used for read access
-    match /orders/{requestId}/files/{fileName} {
+    match /orders/{tempId}/files/{fileName} {
+      // Allow upload: PNG, JPG, ZIP under 100 MB
       allow write: if request.resource.size < 100 * 1024 * 1024
                    && (request.resource.contentType.matches('image/.*')
                        || request.resource.contentType == 'application/zip'
                        || request.resource.contentType == 'application/x-zip-compressed');
-      allow read: if false;
+      // Allow read so the browser can retrieve download URLs after upload
+      allow read: if true;
     }
   }
 }
