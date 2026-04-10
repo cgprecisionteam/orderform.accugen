@@ -1,30 +1,19 @@
-import fs from 'fs';
-import path from 'path';
-
-const COUNTER_FILE = path.join(process.cwd(), 'data', 'counter.json');
-const FY_PREFIX = '2627';
-
-function readCounter(): number {
-  try {
-    const dir = path.dirname(COUNTER_FILE);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    if (!fs.existsSync(COUNTER_FILE)) return 0;
-    const raw = fs.readFileSync(COUNTER_FILE, 'utf-8');
-    return JSON.parse(raw).count ?? 0;
-  } catch {
-    return 0;
-  }
-}
-
-function writeCounter(count: number): void {
-  const dir = path.dirname(COUNTER_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(COUNTER_FILE, JSON.stringify({ count }), 'utf-8');
-}
-
+/**
+ * Stateless order ID generator — safe for Vercel (no filesystem access).
+ * Format: REQ-DDMMYYYY-HHMMSS  e.g. REQ-10042026-143022
+ */
 export function generateRequestId(): string {
-  const next = readCounter() + 1;
-  writeCounter(next);
-  const padded = String(next).padStart(5, '0');
-  return `REQ-${FY_PREFIX}-${padded}`;
+  const now = new Date();
+
+  const day   = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const year  = String(now.getFullYear());
+
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+
+  const orderId = `REQ-${day}${month}${year}-${hh}${mm}${ss}`;
+  console.log('Generated Order ID:', orderId);
+  return orderId;
 }
