@@ -29,14 +29,13 @@ export type UnitType = 'per_tooth' | 'per_arch' | 'per_unit';
 const CATALOGUE: Record<string, { name: string; unitType: UnitType }[]> = {
 
   'Crowns and Bridges': [
-    { name: 'Full Crown | G-CAM',                    unitType: 'per_tooth' },
     { name: 'Full Crown | IPS e.max CAD',            unitType: 'per_tooth' },
     { name: 'Full Crown | PMMA',                     unitType: 'per_tooth' },
     { name: 'Full Crown | Zirconia Economy',         unitType: 'per_tooth' },
     { name: 'Full Crown | Zirconia Economy Plus',    unitType: 'per_tooth' },
     { name: 'Full Crown | Zirconia Premium',         unitType: 'per_tooth' },
     { name: 'Full Crown | Zirconia Premium Plus',    unitType: 'per_tooth' },
-    
+    { name: 'Full Crown | G-CAM',                    unitType: 'per_tooth' },
      ],
 'Inlay/Onlay': [
     { name: 'Inlay/Onlay | Zirconia Economy',        unitType: 'per_tooth' },
@@ -52,13 +51,13 @@ const CATALOGUE: Record<string, { name: string; unitType: UnitType }[]> = {
   ],
 
 'Implant Crowns and Bridges': [
-    { name: 'Implant Crown | G-CAM',                              unitType: 'per_tooth' },
     { name: 'Implant Crown | IPS e.max CAD',                      unitType: 'per_tooth' },
     { name: 'Implant Crown | PMMA',                               unitType: 'per_tooth' },
     { name: 'Implant Crown | Zirconia Economy',                   unitType: 'per_tooth' },
     { name: 'Implant Crown | Zirconia Economy Plus',              unitType: 'per_tooth' },
     { name: 'Implant Crown | Zirconia Economy Premium Plus',      unitType: 'per_tooth' },
     { name: 'Implant Crown | Zirconia Premium',                   unitType: 'per_tooth' },
+    { name: 'Implant Crown | G-CAM',                              unitType: 'per_tooth' },
   ],
 
   'Implant Crown + Custom Abutment': [
