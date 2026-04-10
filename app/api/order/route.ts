@@ -102,7 +102,14 @@ function itemsTable(items: OrderItem[]): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    // ── Env guard ──
+    const apiKey = process.env.RESEND_API_KEY;
+    console.log('[order] RESEND_API_KEY present:', !!apiKey);
+    if (!apiKey) {
+      console.error('[order] RESEND_API_KEY is not set — emails will not send');
+    }
+
+    const resend = new Resend(apiKey);
     const body: OrderBody = await req.json();
 
     const {
@@ -121,7 +128,7 @@ export async function POST(req: NextRequest) {
     const requestId = generateRequestId();
     const rushSuffix = isRush ? ' (Rush)' : '';
 
-    const labSubject = `New Order: ${clinicName} - Pt. ${patientName}${rushSuffix}`;
+    const labSubject    = `New Order: ${clinicName} - Pt. ${patientName}${rushSuffix}`;
     const clientSubject = `New Order Received for Pt. ${patientName}${rushSuffix} — Accugen Digital Dental Lab`;
 
     // File rows
@@ -137,62 +144,73 @@ export async function POST(req: NextRequest) {
         ['Phone',   contactNumber || '—'],
         ['Email',   `<a href="mailto:${email}" style="color:#2563eb;">${email}</a>`],
       ])}
-
       ${tableSection('Case Details', [
         ['Request ID',  `<span style="font-family:monospace;">${requestId}</span>`],
         ['Patient',     patientName],
         ['Required By', deliveryDate],
         ['Rush',        isRush ? '<span style="color:#dc2626;font-weight:600;">Yes</span>' : 'No'],
       ])}
-
       ${itemsTable(items)}
-
-      ${tableSection('Instructions', [
-        ['General Instructions', generalInstructions || '—'],
-      ])}
-
+      ${tableSection('Instructions', [['General Instructions', generalInstructions || '—']])}
       ${fileRows.length > 0 ? tableSection('Files', fileRows) : ''}`;
 
     /* ── Client email ── */
     const clientBody = `
       <p style="margin:0 0 16px;">Hi <strong>${clinicName}</strong>,</p>
       <p style="margin:0 0 16px;">Your lab order has been successfully received and is now being processed.</p>
-
       ${tableSection('Case Details', [
         ['Patient',     patientName],
         ['Required By', deliveryDate],
         ['Rush',        isRush ? '<span style="color:#dc2626;font-weight:600;">Yes</span>' : 'No'],
       ])}
-
       ${itemsTable(items)}
-
       <div style="margin-top:20px;padding:12px 14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:4px;font-size:13px;color:#0369a1;">
         <strong>For support:</strong><br/>
         <a href="mailto:orders@accugendental.com" style="color:#0369a1;">orders@accugendental.com</a><br/>
         +91 7075488757
       </div>`;
 
+    // Track email results so we can log them clearly
+    let labEmailError: string | null = null;
+    let clientEmailError: string | null = null;
+
     try {
-      await resend.emails.send({
+      console.log('[order] Sending lab email to', LAB_EMAIL);
+      const result = await resend.emails.send({
         from: SENDER, to: LAB_EMAIL, reply_to: email,
         subject: labSubject,
         html: wrap('New Order Received', labBody),
       });
-    } catch (err) {
-      console.error('[order] Lab email error:', err);
+      console.log('[order] Lab email result:', JSON.stringify(result));
+    } catch (err: unknown) {
+      labEmailError = err instanceof Error ? err.message : String(err);
+      console.error('[order] Lab email FAILED:', labEmailError);
     }
 
     try {
-      await resend.emails.send({
+      console.log('[order] Sending client email to', email);
+      const result = await resend.emails.send({
         from: SENDER, to: email,
         subject: clientSubject,
         html: wrap('New Order Received', clientBody),
       });
-    } catch (err) {
-      console.error('[order] Client email error:', err);
+      console.log('[order] Client email result:', JSON.stringify(result));
+    } catch (err: unknown) {
+      clientEmailError = err instanceof Error ? err.message : String(err);
+      console.error('[order] Client email FAILED:', clientEmailError);
     }
 
-    return NextResponse.json({ success: true, requestId });
+    // Always return success so the order is not lost even if emails fail.
+    // Email errors are visible in Vercel function logs.
+    return NextResponse.json({
+      success: true,
+      requestId,
+      emailStatus: {
+        lab:    labEmailError    ? `failed: ${labEmailError}`    : 'sent',
+        client: clientEmailError ? `failed: ${clientEmailError}` : 'sent',
+      },
+    });
+
   } catch (err) {
     console.error('[order] Unexpected error:', err);
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });

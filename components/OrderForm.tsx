@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import ToothSelector from './ToothSelector';
 import FileUpload from './FileUpload';
 import SearchableSelect from './SearchableSelect';
-import { CATEGORIES, getProductNamesByCategory, getUnitType } from '@/lib/products';
+import { CATEGORIES, getProductNamesByCategory, getUnitType, isImplantProduct } from '@/lib/products';
 import { submitOrder, OrderItem } from '@/lib/submitOrder';
 import { cn } from '@/lib/utils';
 
@@ -340,7 +340,7 @@ const ItemCard = function ItemCard({
 }: ItemCardProps) {
   const products = item.category ? getProductNamesByCategory(item.category) : [];
   const unitType = getUnitType(item.product);
-  const isImplant = item.category === 'Implant';
+  const isImplant = isImplantProduct(item.product);
 
   return (
     <div

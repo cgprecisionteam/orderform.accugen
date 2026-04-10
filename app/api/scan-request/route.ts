@@ -29,7 +29,11 @@ function section(title: string, rows: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    const apiKey = process.env.RESEND_API_KEY;
+    console.log('[scan-request] RESEND_API_KEY present:', !!apiKey);
+    if (!apiKey) console.error('[scan-request] RESEND_API_KEY is not set');
+
+    const resend = new Resend(apiKey);
     const body: ScanRequestBody = await req.json();
 
     const { clinicName, clinicEmail, contactName, contactNumber, preferredDate, preferredTime } = body;
@@ -99,19 +103,34 @@ export async function POST(req: NextRequest) {
 </div>
 </body></html>`;
 
+    let labEmailError: string | null = null;
+    let clientEmailError: string | null = null;
+
     try {
-      await resend.emails.send({ from: SENDER, to: LAB_EMAIL, reply_to: clinicEmail, subject: labSubject, html: labHtml });
-    } catch (err) {
-      console.error('[scan-request] Lab email error:', err);
+      console.log('[scan-request] Sending lab email to', LAB_EMAIL);
+      const result = await resend.emails.send({ from: SENDER, to: LAB_EMAIL, reply_to: clinicEmail, subject: labSubject, html: labHtml });
+      console.log('[scan-request] Lab email result:', JSON.stringify(result));
+    } catch (err: unknown) {
+      labEmailError = err instanceof Error ? err.message : String(err);
+      console.error('[scan-request] Lab email FAILED:', labEmailError);
     }
 
     try {
-      await resend.emails.send({ from: SENDER, to: clinicEmail, subject: clientSubject, html: clientHtml });
-    } catch (err) {
-      console.error('[scan-request] Client email error:', err);
+      console.log('[scan-request] Sending client email to', clinicEmail);
+      const result = await resend.emails.send({ from: SENDER, to: clinicEmail, subject: clientSubject, html: clientHtml });
+      console.log('[scan-request] Client email result:', JSON.stringify(result));
+    } catch (err: unknown) {
+      clientEmailError = err instanceof Error ? err.message : String(err);
+      console.error('[scan-request] Client email FAILED:', clientEmailError);
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      emailStatus: {
+        lab:    labEmailError    ? `failed: ${labEmailError}`    : 'sent',
+        client: clientEmailError ? `failed: ${clientEmailError}` : 'sent',
+      },
+    });
   } catch (err) {
     console.error('[scan-request] Unexpected error:', err);
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
