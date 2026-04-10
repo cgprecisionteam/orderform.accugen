@@ -1,4 +1,8 @@
 import { createRouteHandler } from 'uploadthing/next';
 import { ourFileRouter } from '@/lib/uploadthing';
 
-export const { GET, POST } = createRouteHandler({ router: ourFileRouter });
+console.log('[uploadthing] route loaded, endpoints:', Object.keys(ourFileRouter));
+
+export const { GET, POST } = createRouteHandler({
+  router: ourFileRouter,
+});

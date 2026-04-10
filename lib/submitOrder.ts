@@ -1,6 +1,19 @@
 import { uploadFiles } from './uploadthing-client';
+import { UnitType } from './products';
 
-export interface OrderFile {
+export interface OrderItem {
+  category: string;
+  product: string;
+  qty: number;
+  unitType: UnitType;
+  toothNumbers: number[];
+  isBridge: boolean;
+  arch: string;
+  shade: string;
+  implantNotes: string;
+}
+
+export interface UploadedFile {
   url: string;
   name: string;
   size: number;
@@ -12,32 +25,28 @@ export interface OrderPayload {
   contactName: string;
   contactNumber: string;
   patientName: string;
-  category: string;
-  product: string;
-  toothNumbers: number[];
-  isBridge: boolean;
-  shade: string;
-  implantNotes: string;
+  items: OrderItem[];
   generalInstructions: string;
   deliveryDate: string;
   isRush: boolean;
   files: File[];
 }
 
-export async function submitOrder(payload: OrderPayload): Promise<string> {
-  // Step 1 — Upload files to UploadThing CDN
-  let uploadedFiles: OrderFile[] = [];
+export async function submitOrder(
+  payload: OrderPayload,
+  onUploaded?: () => void,
+): Promise<string> {
+  // Step 1 — Upload files
+  let uploadedFiles: UploadedFile[] = [];
 
   if (payload.files.length > 0) {
     const results = await uploadFiles('orderFiles', { files: payload.files });
-    uploadedFiles = results.map((r) => ({
-      url: r.url,
-      name: r.name,
-      size: r.size,
-    }));
+    uploadedFiles = results.map(r => ({ url: r.ufsUrl, name: r.name, size: r.size }));
   }
 
-  // Step 2 — POST order data + file URLs to Next.js API route
+  onUploaded?.();
+
+  // Step 2 — POST to API
   const response = await fetch('/api/order', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -47,12 +56,7 @@ export async function submitOrder(payload: OrderPayload): Promise<string> {
       contactName: payload.contactName,
       contactNumber: payload.contactNumber,
       patientName: payload.patientName,
-      category: payload.category,
-      product: payload.product,
-      toothNumbers: payload.toothNumbers,
-      isBridge: payload.isBridge,
-      shade: payload.shade,
-      implantNotes: payload.implantNotes,
+      items: payload.items,
       generalInstructions: payload.generalInstructions,
       deliveryDate: payload.deliveryDate,
       isRush: payload.isRush,
