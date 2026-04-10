@@ -30,7 +30,6 @@ const INITIAL_ITEM: OrderItem = {
   qty: 1,
   unitType: 'per_tooth',
   toothNumbers: [],
-  isBridge: false,
   arch: '',
   shade: '',
   implantNotes: '',
@@ -372,7 +371,7 @@ const ItemCard = function ItemCard({
               value={item.category}
               onChange={v => onUpdate({
                 category: v, product: '', qty: 1, unitType: 'per_tooth',
-                toothNumbers: [], isBridge: false, arch: '',
+                toothNumbers: [], arch: '',
               })}
               placeholder="Select category…"
               hasError={!!errors.category}
@@ -385,7 +384,7 @@ const ItemCard = function ItemCard({
               onChange={v => onUpdate({
                 product: v,
                 unitType: getUnitType(v),
-                qty: 1, toothNumbers: [], isBridge: false, arch: '',
+                qty: 1, toothNumbers: [], arch: '',
               })}
               placeholder={item.category ? 'Select product…' : 'Select category first…'}
               disabled={!item.category}
@@ -414,8 +413,6 @@ const ItemCard = function ItemCard({
               <ToothSelector
                 selected={item.toothNumbers}
                 onChange={v => onUpdate({ toothNumbers: v })}
-                isBridge={item.isBridge}
-                onBridgeChange={v => onUpdate({ isBridge: v })}
               />
             </div>
           </Field>

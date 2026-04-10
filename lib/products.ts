@@ -29,12 +29,12 @@ export type UnitType = 'per_tooth' | 'per_arch' | 'per_unit';
 const CATALOGUE: Record<string, { name: string; unitType: UnitType }[]> = {
 
   'Crowns and Bridges': [
-    { name: 'Full Crown | IPS e.max CAD',            unitType: 'per_tooth' },
-    { name: 'Full Crown | PMMA',                     unitType: 'per_tooth' },
     { name: 'Full Crown | Zirconia Economy',         unitType: 'per_tooth' },
     { name: 'Full Crown | Zirconia Economy Plus',    unitType: 'per_tooth' },
     { name: 'Full Crown | Zirconia Premium',         unitType: 'per_tooth' },
     { name: 'Full Crown | Zirconia Premium Plus',    unitType: 'per_tooth' },
+    { name: 'Full Crown | IPS e.max CAD',            unitType: 'per_tooth' },
+    { name: 'Full Crown | PMMA',                     unitType: 'per_tooth' },
     { name: 'Full Crown | G-CAM',                    unitType: 'per_tooth' },
      ],
 'Inlay/Onlay': [
@@ -51,22 +51,22 @@ const CATALOGUE: Record<string, { name: string; unitType: UnitType }[]> = {
   ],
 
 'Implant Crowns and Bridges': [
-    { name: 'Implant Crown | IPS e.max CAD',                      unitType: 'per_tooth' },
-    { name: 'Implant Crown | PMMA',                               unitType: 'per_tooth' },
     { name: 'Implant Crown | Zirconia Economy',                   unitType: 'per_tooth' },
     { name: 'Implant Crown | Zirconia Economy Plus',              unitType: 'per_tooth' },
     { name: 'Implant Crown | Zirconia Economy Premium Plus',      unitType: 'per_tooth' },
     { name: 'Implant Crown | Zirconia Premium',                   unitType: 'per_tooth' },
+    { name: 'Implant Crown | IPS e.max CAD',                      unitType: 'per_tooth' },
+    { name: 'Implant Crown | PMMA',                               unitType: 'per_tooth' },
     { name: 'Implant Crown | G-CAM',                              unitType: 'per_tooth' },
   ],
 
   'Implant Crown + Custom Abutment': [
-    { name: 'Implant Crown + Custom Abutment | PMMA',             unitType: 'per_tooth' },
     { name: 'Implant Crown + Custom Abutment | Zr Economy',       unitType: 'per_tooth' },
     { name: 'Implant Crown + Custom Abutment | Zr Economy Plus',  unitType: 'per_tooth' },
     { name: 'Implant Crown + Custom Abutment | Zr Premium',       unitType: 'per_tooth' },
     { name: 'Implant Crown + Custom Abutment | Zr Premium Plus',  unitType: 'per_tooth' },
     { name: 'Milled Custom Abutment',                             unitType: 'per_tooth' },
+    { name: 'Implant Crown + Custom Abutment | PMMA',             unitType: 'per_tooth' },
   ],
 
   'Full Arch Implant Prosthesis': [

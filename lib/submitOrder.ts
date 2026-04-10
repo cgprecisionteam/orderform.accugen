@@ -7,7 +7,6 @@ export interface OrderItem {
   qty: number;
   unitType: UnitType;
   toothNumbers: number[];
-  isBridge: boolean;
   arch: string;
   shade: string;
   implantNotes: string;

@@ -17,7 +17,6 @@ interface OrderItem {
   qty: number;
   unitType: 'per_tooth' | 'per_arch' | 'per_unit';
   toothNumbers: number[];
-  isBridge: boolean;
   arch: string;
   shade: string;
   implantNotes: string;

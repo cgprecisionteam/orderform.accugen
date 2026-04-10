@@ -5,8 +5,6 @@ import { useState } from 'react';
 interface ToothSelectorProps {
   selected: number[];
   onChange: (teeth: number[]) => void;
-  isBridge: boolean;
-  onBridgeChange: (v: boolean) => void;
 }
 
 // FDI layout rows
@@ -44,7 +42,7 @@ function ToothButton({
   );
 }
 
-export default function ToothSelector({ selected, onChange, isBridge, onBridgeChange }: ToothSelectorProps) {
+export default function ToothSelector({ selected, onChange }: ToothSelectorProps) {
   const toggle = (n: number) => {
     if (selected.includes(n)) {
       onChange(selected.filter((t) => t !== n));
@@ -108,15 +106,6 @@ export default function ToothSelector({ selected, onChange, isBridge, onBridgeCh
           </span>
         )}
 
-        <label className="flex items-center gap-2 ml-auto cursor-pointer">
-          <input
-            type="checkbox"
-            checked={isBridge}
-            onChange={(e) => onBridgeChange(e.target.checked)}
-            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-          />
-          <span className="text-sm text-gray-700">Mark as Bridge</span>
-        </label>
       </div>
     </div>
   );
