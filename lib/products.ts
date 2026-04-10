@@ -45,7 +45,7 @@ export const PRODUCTS: Product[] = [
 ];
 
 /** Ordered, deduplicated category list derived from PRODUCTS. */
-export const CATEGORIES: string[] = [...new Set(PRODUCTS.map((p) => p.category))];
+export const CATEGORIES: string[] = Array.from(new Set(PRODUCTS.map((p) => p.category)));
 
 /** Products for a given category, sorted alphabetically. */
 export function getProductsByCategory(category: string): Product[] {
