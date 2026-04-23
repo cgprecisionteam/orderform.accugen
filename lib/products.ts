@@ -70,7 +70,6 @@ const CATALOGUE: Record<string, { name: string; unitType: UnitType }[]> = {
   ],
 
   'Full Arch Implant Prosthesis': [
-    { name: 'Implant Full Arch | PMMA',                                       unitType: 'per_arch' },
     { name: 'Implant Full Arch | PMMA on Milled Titanium Bar',                unitType: 'per_arch' },
     { name: 'Implant Full Arch | PMMA with Ti Base',                          unitType: 'per_arch' },
 
@@ -151,4 +150,112 @@ export function getUnitType(productName: string): UnitType {
 /** Whether a product belongs to an implant category. */
 export function isImplantProduct(productName: string): boolean {
   return PRODUCTS.find(p => p.name === productName)?.isImplant ?? false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RESTORATION-BASED UI TYPES (used by OrderForm v2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type Material = 'Zirconia' | 'Lithium Disilicate' | 'PMMA' | 'G-CAM';
+export type ZirconiaTier = 'Economy' | 'Economy Plus' | 'Premium' | 'Premium Plus';
+export type RestGroup = 'restoration' | 'implant' | 'fullarch';
+
+export interface ProductTypeConfig {
+  label: string;
+  group: RestGroup;
+  unitType: UnitType;
+  isImplant: boolean;
+  availableMaterials: Material[];
+  availableTiers?: ZirconiaTier[];
+  noMaterial?: boolean;
+  variants?: string[];
+  siteCounts?: string[];
+}
+
+export const PRODUCT_TYPES: ProductTypeConfig[] = [
+  // ── Restorations ──────────────────────────────────────────────────────────
+  { label: 'Full Crown',   group: 'restoration', unitType: 'per_tooth', isImplant: false,
+    availableMaterials: ['Zirconia', 'Lithium Disilicate', 'PMMA', 'G-CAM'] },
+  { label: 'Bridge',       group: 'restoration', unitType: 'per_tooth', isImplant: false,
+    availableMaterials: ['Zirconia', 'Lithium Disilicate', 'PMMA', 'G-CAM'] },
+  { label: 'Inlay/Onlay', group: 'restoration', unitType: 'per_tooth', isImplant: false,
+    availableMaterials: ['Zirconia', 'Lithium Disilicate'] },
+  { label: 'Veneer',      group: 'restoration', unitType: 'per_tooth', isImplant: false,
+    availableMaterials: ['Lithium Disilicate', 'Zirconia'],
+    availableTiers: ['Premium', 'Premium Plus'] },
+
+  // ── Implant ───────────────────────────────────────────────────────────────
+  { label: 'Implant Crown (Ti Base by Dentist)', group: 'implant', unitType: 'per_tooth', isImplant: true,
+    availableMaterials: ['Zirconia', 'Lithium Disilicate', 'PMMA', 'G-CAM'] },
+  { label: 'Implant Bridge',                    group: 'implant', unitType: 'per_tooth', isImplant: true,
+    availableMaterials: ['Zirconia', 'PMMA'] },
+  { label: 'Implant Crown + Custom Abutment',   group: 'implant', unitType: 'per_tooth', isImplant: true,
+    availableMaterials: ['Zirconia', 'PMMA'] },
+
+  // ── Full Arch ─────────────────────────────────────────────────────────────
+  { label: 'iBar (Implant Full Arch)',                    group: 'fullarch', unitType: 'per_arch', isImplant: true,
+    availableMaterials: ['Zirconia'] },
+  { label: 'Malo Framework + Crowns (Implant Full Arch)', group: 'fullarch', unitType: 'per_arch', isImplant: true,
+    availableMaterials: ['Zirconia'] },
+  { label: 'Immediate Implant Full Arch', group: 'fullarch', unitType: 'per_arch', isImplant: true,
+    availableMaterials: ['PMMA'],
+    variants: ['On Titanium Bar', 'With Ti Base'] },
+  { label: 'Milled Titanium Bar',        group: 'fullarch', unitType: 'per_arch', isImplant: true,
+    noMaterial: true, availableMaterials: [],
+    siteCounts: ['2 Implant Sites', '3 Implant Sites', '4-6 Implant Sites', '7+ Implant Sites'] },
+  { label: 'Milled Malo Framework',      group: 'fullarch', unitType: 'per_arch', isImplant: true,
+    noMaterial: true, availableMaterials: [],
+    siteCounts: ['2 Implant Sites', '3 Implant Sites', '4-6 Implant Sites', '7+ Implant Sites'] },
+];
+
+export function resolveProductName(
+  productType: string,
+  material: Material | '',
+  tier: ZirconiaTier | '',
+  variant = '',
+  siteCount = '',
+): string {
+  if (productType === 'Malo Framework + Crowns (Implant Full Arch)') {
+    return `Malo Framework + Zirconia Crowns ${tier}`;
+  }
+
+  if (productType === 'Immediate Implant Full Arch') {
+    if (variant === 'On Titanium Bar') return 'Immediate Implant Full Arch | PMMA on Titanium Bar';
+    if (variant === 'With Ti Base')    return 'Immediate Implant Full Arch | PMMA with Ti Base';
+    return 'Immediate Implant Full Arch | PMMA';
+  }
+
+  if (productType === 'Milled Titanium Bar') {
+    return `Milled Titanium Bar (${siteCount})`;
+  }
+
+  if (productType === 'Milled Malo Framework') {
+    return `Milled Malo Framework (${siteCount})`;
+  }
+
+  if (productType === 'Implant Crown + Custom Abutment') {
+    if (material === 'Zirconia') return `Implant Crown + Custom Abutment | Zr ${tier}`;
+    return `Implant Crown + Custom Abutment | ${material}`;
+  }
+
+  // Standard pattern applies to all remaining products
+  if (material === 'Zirconia')           return `${productType} | Zirconia ${tier}`;
+  if (material === 'Lithium Disilicate') return `${productType} | IPS e.max CAD`;
+  return `${productType} | ${material}`;
+}
+
+export function getRestorationCategory(productType: string): string {
+  switch (productType) {
+    case 'Inlay/Onlay':                    return 'Inlay/Onlay';
+    case 'Veneer':                         return 'Veneers';
+    case 'Implant Crown + Custom Abutment': return 'Implant Crown + Custom Abutment';
+    case 'Milled Titanium Bar':
+    case 'Milled Malo Framework':          return 'Milled Titanium Bars';
+    case 'Implant Crown (Ti Base by Dentist)':
+    case 'Implant Bridge':                 return 'Implant Crowns and Bridges';
+    case 'iBar (Implant Full Arch)':
+    case 'Malo Framework + Crowns (Implant Full Arch)':
+    case 'Immediate Implant Full Arch':    return 'Full Arch Implant Prosthesis';
+    default:                               return 'Crowns and Bridges';
+  }
 }

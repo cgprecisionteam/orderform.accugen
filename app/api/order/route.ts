@@ -14,6 +14,11 @@ interface OrderFile {
 interface OrderItem {
   category: string;
   product: string;
+  productType: string;
+  material: string;
+  zirconiaTier: string;
+  variant: string;
+  siteCount: string;
   qty: number;
   unitType: 'per_tooth' | 'per_arch' | 'per_unit';
   toothNumbers: number[];
@@ -32,6 +37,8 @@ interface OrderBody {
   generalInstructions?: string;
   deliveryDate: string;
   isRush: boolean;
+  requireTryIn: boolean;
+  dataType: 'scan' | 'pickup';
   files: OrderFile[];
 }
 
@@ -64,7 +71,7 @@ function itemsTable(items: OrderItem[]): string {
   const th = (t: string) =>
     `<th style="padding:8px 12px;border:1px solid #e5e7eb;background:#f3f4f6;font-weight:700;color:#374151;text-align:left;">${t}</th>`;
 
-  function qtyDisplay(item: OrderItem): string {
+  function locationDisplay(item: OrderItem): string {
     if (item.unitType === 'per_tooth') {
       return item.toothNumbers?.length > 0 ? item.toothNumbers.join(', ') : '—';
     }
@@ -74,27 +81,39 @@ function itemsTable(items: OrderItem[]): string {
     return String(item.qty ?? 1);
   }
 
+  function materialDisplay(item: OrderItem): string {
+    if (!item.material) return '—';
+    return item.material === 'Lithium Disilicate' ? 'Lithium Disilicate (e.max)' : item.material;
+  }
+
+  function tierDisplay(item: OrderItem): string {
+    if (item.zirconiaTier) return item.zirconiaTier;
+    if (item.variant)      return item.variant;
+    if (item.siteCount)    return item.siteCount;
+    return '—';
+  }
+
   const rows = items.map((item, i) => `
     <tr>
       <td style="padding:8px 12px;border:1px solid #e5e7eb;color:#6b7280;text-align:center;">${i + 1}</td>
-      <td style="padding:8px 12px;border:1px solid #e5e7eb;">${item.category}</td>
-      <td style="padding:8px 12px;border:1px solid #e5e7eb;">${item.product}</td>
-      <td style="padding:8px 12px;border:1px solid #e5e7eb;text-align:center;">${qtyDisplay(item)}</td>
+      <td style="padding:8px 12px;border:1px solid #e5e7eb;">${item.productType || item.product}</td>
+      <td style="padding:8px 12px;border:1px solid #e5e7eb;">${materialDisplay(item)}</td>
+      <td style="padding:8px 12px;border:1px solid #e5e7eb;">${tierDisplay(item)}</td>
+      <td style="padding:8px 12px;border:1px solid #e5e7eb;text-align:center;">${locationDisplay(item)}</td>
       <td style="padding:8px 12px;border:1px solid #e5e7eb;">${item.shade || '—'}</td>
     </tr>`).join('');
 
-  // Implant notes as footnotes beneath the table
   const implantNotes = items
-    .map((item, i) => item.implantNotes ? `<p style="margin:4px 0;font-size:13px;color:#374151;">Item ${i + 1} — ${item.implantNotes}</p>` : '')
+    .map((item, i) => item.implantNotes ? `<p style="margin:4px 0;font-size:13px;color:#374151;">Restoration ${i + 1} — ${item.implantNotes}</p>` : '')
     .filter(Boolean).join('');
 
   return `
-    <p style="margin:20px 0 6px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#9ca3af;">Order Items</p>
+    <p style="margin:20px 0 6px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#9ca3af;">Restorations</p>
     <table style="border-collapse:collapse;width:100%;font-size:14px;">
-      <thead><tr>${th('#')}${th('Category')}${th('Product')}${th('Qty / Teeth / Arch')}${th('Shade')}</tr></thead>
+      <thead><tr>${th('#')}${th('Product')}${th('Material')}${th('Tier / Option')}${th('Teeth / Arch')}${th('Shade')}</tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    ${implantNotes ? `<div style="margin-top:10px;padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:4px;"><p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#9a3412;">Implant Notes</p>${implantNotes}</div>` : ''}`;
+    ${implantNotes ? `<div style="margin-top:10px;padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:4px;"><p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#9a3412;">Implant Details</p>${implantNotes}</div>` : ''}`;
 }
 
 /* ── Route handler ── */
@@ -114,7 +133,7 @@ export async function POST(req: NextRequest) {
     const {
       clinicName, email, contactName, contactNumber,
       patientName, items, generalInstructions,
-      deliveryDate, isRush, files = [],
+      deliveryDate, isRush, requireTryIn, dataType, files = [],
     } = body;
 
     if (!clinicName || !email || !patientName || !deliveryDate) {
@@ -125,14 +144,18 @@ export async function POST(req: NextRequest) {
     }
 
     const requestId = generateRequestId();
-    const rushSuffix = isRush ? ' (Rush)' : '';
+    const rushSuffix   = isRush ? ' (Rush)' : '';
+    const dataSuffix   = dataType === 'pickup' ? ' (Impression Pickup)' : ' (Digital Scan)';
 
-    const labSubject    = `New Order: ${clinicName} - Pt. ${patientName}${rushSuffix}`;
-    const clientSubject = `New Order Received for Pt. ${patientName}${rushSuffix} — Accugen Digital Dental Lab`;
+    const labSubject    = `New Order: ${clinicName} - Pt. ${patientName}${dataSuffix}${rushSuffix}`;
+    const clientSubject = `New Order Received for Pt. ${patientName}${dataSuffix}${rushSuffix} — Accugen Digital Dental Lab`;
 
     // File rows
     const fileRows: [string, string][] = files.length > 0
-      ? files.map((f, i) => [`File ${i + 1}`, `<a href="${f.url}" style="color:#2563eb;">${f.name}</a>`])
+      ? files.map((f, i) => {
+          const downloadUrl = f.url.includes('?') ? `${f.url}&download=1` : `${f.url}?download=1`;
+          return [`File ${i + 1}`, `<a href="${downloadUrl}" download="${f.name}" style="color:#2563eb;">${f.name}</a>`];
+        })
       : [];
 
     /* ── Lab email ── */
@@ -148,6 +171,8 @@ export async function POST(req: NextRequest) {
         ['Patient',     patientName],
         ['Required By', deliveryDate],
         ['Rush',        isRush ? '<span style="color:#dc2626;font-weight:600;">Yes</span>' : 'No'],
+        ['Try-in',      requireTryIn ? '<span style="color:#2563eb;font-weight:600;">Required</span>' : 'No'],
+        ['Data Input',  dataType === 'pickup' ? 'Impression Pickup' : 'Digital Scan'],
       ])}
       ${itemsTable(items)}
       ${tableSection('Instructions', [['General Instructions', generalInstructions || '—']])}
@@ -161,6 +186,8 @@ export async function POST(req: NextRequest) {
         ['Patient',     patientName],
         ['Required By', deliveryDate],
         ['Rush',        isRush ? '<span style="color:#dc2626;font-weight:600;">Yes</span>' : 'No'],
+        ['Try-in',      requireTryIn ? '<span style="color:#2563eb;font-weight:600;">Required</span>' : 'No'],
+        ['Data Input',  dataType === 'pickup' ? 'Impression Pickup' : 'Digital Scan'],
       ])}
       ${itemsTable(items)}
       <div style="margin-top:20px;padding:12px 14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:4px;font-size:13px;color:#0369a1;">

@@ -4,9 +4,24 @@ import { useState, useEffect, useRef } from 'react';
 import ToothSelector from './ToothSelector';
 import FileUpload from './FileUpload';
 import SearchableSelect from './SearchableSelect';
-import { CATEGORIES, getProductNamesByCategory, getUnitType, isImplantProduct } from '@/lib/products';
-import { submitOrder, OrderItem } from '@/lib/submitOrder';
+import {
+  PRODUCT_TYPES, ProductTypeConfig,
+  Material, ZirconiaTier,
+} from '@/lib/products';
+import { submitOrder, Restoration } from '@/lib/submitOrder';
 import { cn } from '@/lib/utils';
+
+/* ── Constants ── */
+
+const ALL_TIERS: ZirconiaTier[] = ['Economy', 'Economy Plus', 'Premium', 'Premium Plus'];
+const ALL_PRODUCT_LABELS = PRODUCT_TYPES.map(p => p.label);
+
+const MATERIAL_DISPLAY: Partial<Record<Material, string>> = {
+  'Lithium Disilicate': 'Lithium Disilicate (e.max)',
+};
+const DISPLAY_TO_MATERIAL: Record<string, Material> = {
+  'Lithium Disilicate (e.max)': 'Lithium Disilicate',
+};
 
 /* ── Helpers ── */
 
@@ -24,16 +39,31 @@ function isValidEmail(e: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 }
 
-const INITIAL_ITEM: OrderItem = {
-  category: '',
-  product: '',
-  qty: 1,
-  unitType: 'per_tooth',
-  toothNumbers: [],
-  arch: '',
-  shade: '',
-  implantNotes: '',
-};
+function newRestoration(): Restoration {
+  return {
+    id: Math.random().toString(36).slice(2),
+    toothNumbers: [], arch: '',
+    productType: '', material: '', zirconiaTier: '', variant: '', siteCount: '',
+    implantSystem: '', implantPlatform: '',
+    shade: '',
+  };
+}
+
+function getSubLabel(r: Restoration): string {
+  const loc = r.arch
+    ? `${r.arch} Arch`
+    : r.toothNumbers.length === 1 ? `Tooth ${r.toothNumbers[0]}`
+    : r.toothNumbers.length > 1
+      ? `Teeth ${r.toothNumbers.slice(0, 3).join(', ')}${r.toothNumbers.length > 3 ? '…' : ''}`
+      : '';
+  const prod = r.productType
+    ? r.material ? `${r.material} ${r.productType}` : r.productType
+    : '';
+  if (loc && prod) return `${loc} – ${prod}`;
+  return loc || prod;
+}
+
+/* ── Form types ── */
 
 interface FormFields {
   clinicName: string;
@@ -44,6 +74,8 @@ interface FormFields {
   generalInstructions: string;
   deliveryDate: string;
   isRush: boolean;
+  requireTryIn: boolean;
+  dataType: 'scan' | 'pickup';
 }
 
 const INITIAL_FORM: FormFields = {
@@ -55,12 +87,19 @@ const INITIAL_FORM: FormFields = {
   generalInstructions: '',
   deliveryDate: defaultDeliveryDate(),
   isRush: false,
+  requireTryIn: false,
+  dataType: 'scan',
 };
 
 type Stage = 'idle' | 'uploading' | 'submitting' | 'done' | 'error';
+type FormErrors = Partial<Record<keyof FormFields, string>>;
 
-type FormErrors = Partial<Record<keyof FormFields | 'files', string>>;
-type ItemErrors = Partial<Record<'category' | 'product', string>>;
+interface RestError {
+  productType?: string;
+  zirconiaTier?: string;
+  variant?: string;
+  siteCount?: string;
+}
 
 interface OrderFormProps {
   onStatusChange?: (stage: string, summary?: string) => void;
@@ -70,48 +109,44 @@ interface OrderFormProps {
 
 export default function OrderForm({ onStatusChange }: OrderFormProps) {
   const [form, setForm] = useState<FormFields>(INITIAL_FORM);
-  const [items, setItems] = useState<OrderItem[]>([{ ...INITIAL_ITEM }]);
+  const [restorations, setRestorations] = useState<Restoration[]>([newRestoration()]);
   const [files, setFiles] = useState<File[]>([]);
   const [errors, setErrors] = useState<FormErrors>({});
-  const [itemErrors, setItemErrors] = useState<ItemErrors[]>([{}]);
+  const [restErrors, setRestErrors] = useState<RestError[]>([{}]);
   const [stage, setStage] = useState<Stage>('idle');
   const [successId, setSuccessId] = useState('');
-  const lastItemRef = useRef<HTMLDivElement>(null);
-
-  const busy = stage === 'uploading' || stage === 'submitting';
+  const lastCardRef = useRef<HTMLDivElement>(null);
 
   const setField = <K extends keyof FormFields>(k: K, v: FormFields[K]) => {
     setForm(prev => ({ ...prev, [k]: v }));
     setErrors(prev => ({ ...prev, [k]: '' }));
   };
 
-  /* ── Item handlers ── */
+  /* ── Restoration handlers ── */
 
-  const addItem = () => {
-    setItems(prev => [...prev, { ...INITIAL_ITEM }]);
-    setItemErrors(prev => [...prev, {}]);
-    // scroll to new item after paint
-    setTimeout(() => lastItemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+  const addRestoration = () => {
+    setRestorations(prev => [...prev, newRestoration()]);
+    setRestErrors(prev => [...prev, {}]);
+    setTimeout(() => lastCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
   };
 
-  const removeItem = (index: number) => {
-    if (items.length === 1) return;
-    setItems(prev => prev.filter((_, i) => i !== index));
-    setItemErrors(prev => prev.filter((_, i) => i !== index));
+  const removeRestoration = (index: number) => {
+    if (restorations.length === 1) return;
+    setRestorations(prev => prev.filter((_, i) => i !== index));
+    setRestErrors(prev => prev.filter((_, i) => i !== index));
   };
 
-  const updateItem = (index: number, updates: Partial<OrderItem>) => {
-    setItems(prev => {
+  const updateRestoration = (index: number, updates: Partial<Restoration>) => {
+    setRestorations(prev => {
       const next = [...prev];
       next[index] = { ...next[index], ...updates };
       return next;
     });
-    // Clear field-level errors touched by this update
-    const clearedKeys = Object.keys(updates) as Array<keyof ItemErrors>;
-    setItemErrors(prev => {
+    const clearedKeys = Object.keys(updates) as Array<keyof RestError>;
+    setRestErrors(prev => {
       const next = [...prev];
       const cleared = { ...next[index] };
-      clearedKeys.forEach(k => { if (k in cleared) delete cleared[k]; });
+      clearedKeys.forEach(k => { if (k in cleared) delete (cleared as Record<string, unknown>)[k]; });
       next[index] = cleared;
       return next;
     });
@@ -128,16 +163,18 @@ export default function OrderForm({ onStatusChange }: OrderFormProps) {
     if (!form.deliveryDate) e.deliveryDate = 'Select a delivery date.';
     setErrors(e);
 
-    const ie: ItemErrors[] = items.map(item => {
-      const err: ItemErrors = {};
-      if (!item.category) err.category = 'Select a category.';
-      if (!item.product) err.product = 'Select a product.';
+    const re: RestError[] = restorations.map(r => {
+      const err: RestError = {};
+      if (!r.productType) { err.productType = 'Select a restoration type.'; return err; }
+      const pt = PRODUCT_TYPES.find(p => p.label === r.productType);
+      if (pt?.siteCounts && !r.siteCount) err.siteCount = 'Select implant site count.';
+      if (pt?.variants && !r.variant) err.variant = 'Select a sub-type.';
+      if (!pt?.noMaterial && r.material === 'Zirconia' && !r.zirconiaTier) err.zirconiaTier = 'Select a Zirconia tier.';
       return err;
     });
-    setItemErrors(ie);
+    setRestErrors(re);
 
-    const itemsValid = ie.every(err => Object.keys(err).length === 0);
-    return Object.keys(e).length === 0 && itemsValid;
+    return Object.keys(e).length === 0 && re.every(err => Object.keys(err).length === 0);
   };
 
   /* ── Submit ── */
@@ -148,13 +185,13 @@ export default function OrderForm({ onStatusChange }: OrderFormProps) {
     try {
       setStage(files.length > 0 ? 'uploading' : 'submitting');
       const requestId = await submitOrder(
-        { ...form, items, files },
+        { ...form, restorations, files },
         () => setStage('submitting'),
       );
       setSuccessId(requestId);
       setStage('done');
       setForm(INITIAL_FORM);
-      setItems([{ ...INITIAL_ITEM }]);
+      setRestorations([newRestoration()]);
       setFiles([]);
     } catch (err) {
       console.error(err);
@@ -164,15 +201,15 @@ export default function OrderForm({ onStatusChange }: OrderFormProps) {
 
   /* ── Status sync (must be above early returns) ── */
 
-  const firstProduct = items[0]?.product;
+  const firstType = restorations[0]?.productType;
   const summary = form.patientName
-    ? `${form.patientName}${firstProduct ? ` · ${firstProduct}` : ''}${items.length > 1 ? ` +${items.length - 1} more` : ''}${files.length > 0 ? ` · ${files.length} file${files.length > 1 ? 's' : ''}` : ''}`
+    ? `${form.patientName}${firstType ? ` · ${firstType}` : ''}${restorations.length > 1 ? ` +${restorations.length - 1} more` : ''}`
     : undefined;
 
   useEffect(() => {
     onStatusChange?.(stage, summary);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, form.patientName, firstProduct, items.length, files.length]);
+  }, [stage, form.patientName, firstType, restorations.length]);
 
   /* ── Success screen ── */
 
@@ -244,29 +281,56 @@ export default function OrderForm({ onStatusChange }: OrderFormProps) {
           </div>
         </Card>
 
-        {/* ── Items ── */}
+        {/* ── Restorations ── */}
         <div className="space-y-4">
-          {items.map((item, index) => (
-            <ItemCard
-              key={index}
-              containerRef={index === items.length - 1 ? lastItemRef : undefined}
-              item={item}
+          {restorations.map((r, index) => (
+            <RestorationCard
+              key={r.id}
+              containerRef={index === restorations.length - 1 ? lastCardRef : undefined}
+              restoration={r}
               index={index}
-              errors={itemErrors[index] ?? {}}
-              showRemove={items.length > 1}
-              onUpdate={updates => updateItem(index, updates)}
-              onRemove={() => removeItem(index)}
+              errors={restErrors[index] ?? {}}
+              showRemove={restorations.length > 1}
+              onUpdate={updates => updateRestoration(index, updates)}
+              onRemove={() => removeRestoration(index)}
             />
           ))}
 
           <button
             type="button"
-            onClick={addItem}
+            onClick={addRestoration}
             className="w-full py-3 border-2 border-dashed border-blue-200 rounded-2xl text-sm font-medium text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-colors"
           >
-            + Add Another Item
+            + Add Another Restoration
           </button>
         </div>
+
+        {/* ── Data Input ── */}
+        <Card title="Data Input">
+          <div className="flex gap-2 mb-4">
+            {(['scan', 'pickup'] as const).map(dt => (
+              <button
+                key={dt}
+                type="button"
+                onClick={() => { setField('dataType', dt); if (dt === 'pickup') setFiles([]); }}
+                className={cn(
+                  'px-4 py-2 rounded-lg border text-sm font-medium transition-colors',
+                  form.dataType === dt
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400',
+                )}
+              >
+                {dt === 'scan' ? 'Digital Scan' : 'Request Impression Pickup'}
+              </button>
+            ))}
+          </div>
+          {form.dataType === 'scan' && (
+            <>
+              <p className="text-xs text-gray-400 mb-3">Attach Intraoral Scan and patient intraoral pics for shade matching</p>
+              <FileUpload files={files} onChange={setFiles} />
+            </>
+          )}
+        </Card>
 
         {/* ── Notes ── */}
         <Card title="Notes">
@@ -308,12 +372,26 @@ export default function OrderForm({ onStatusChange }: OrderFormProps) {
                 {form.isRush && <span className="ml-1.5 text-orange-600 text-xs font-semibold bg-orange-50 px-1.5 py-0.5 rounded">(RUSH)</span>}
               </span>
             </div>
+            <div className="flex items-center gap-3 pb-0.5">
+              <button
+                type="button" role="switch" aria-checked={form.requireTryIn}
+                onClick={() => setField('requireTryIn', !form.requireTryIn)}
+                className={cn(
+                  'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none',
+                  form.requireTryIn ? 'bg-blue-600' : 'bg-gray-200',
+                )}
+              >
+                <span className={cn(
+                  'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+                  form.requireTryIn ? 'translate-x-6' : 'translate-x-1',
+                )} />
+              </button>
+              <span className="text-sm font-medium text-gray-700">
+                Require Try-in
+                {form.requireTryIn && <span className="ml-1.5 text-blue-600 text-xs font-semibold bg-blue-50 px-1.5 py-0.5 rounded">(Try-in)</span>}
+              </span>
+            </div>
           </div>
-        </Card>
-
-        {/* ── Files ── */}
-        <Card title="Files">
-          <FileUpload files={files} onChange={setFiles} error={errors.files} />
         </Card>
 
         <div className="h-4" />
@@ -322,24 +400,43 @@ export default function OrderForm({ onStatusChange }: OrderFormProps) {
   );
 }
 
-/* ── Item Card ── */
+/* ── Restoration Card ── */
 
-interface ItemCardProps {
-  item: OrderItem;
+interface RestorationCardProps {
+  restoration: Restoration;
   index: number;
-  errors: ItemErrors;
+  errors: RestError;
   showRemove: boolean;
-  onUpdate: (updates: Partial<OrderItem>) => void;
+  onUpdate: (updates: Partial<Restoration>) => void;
   onRemove: () => void;
   containerRef?: React.RefObject<HTMLDivElement>;
 }
 
-const ItemCard = function ItemCard({
-  item, index, errors, showRemove, onUpdate, onRemove, containerRef,
-}: ItemCardProps) {
-  const products = item.category ? getProductNamesByCategory(item.category) : [];
-  const unitType = getUnitType(item.product);
-  const isImplant = isImplantProduct(item.product);
+function RestorationCard({
+  restoration: r, index, errors, showRemove, onUpdate, onRemove, containerRef,
+}: RestorationCardProps) {
+  const pt: ProductTypeConfig | undefined = PRODUCT_TYPES.find(p => p.label === r.productType);
+  const isFullArch = pt?.unitType === 'per_arch';
+  const tiers = pt?.availableTiers ?? ALL_TIERS;
+  const subLabel = getSubLabel(r);
+
+  const materialOptions = (pt?.availableMaterials ?? []).map(m => MATERIAL_DISPLAY[m] ?? m);
+  const materialValue   = r.material ? (MATERIAL_DISPLAY[r.material as Material] ?? r.material) : '';
+
+  const selectProductType = (label: string) => {
+    const newPt = PRODUCT_TYPES.find(p => p.label === label);
+    const switchesToArch = newPt?.unitType === 'per_arch';
+    const currentIsArch  = pt?.unitType === 'per_arch';
+    onUpdate({
+      productType:  label,
+      material:     '',
+      zirconiaTier: '',
+      variant:      '',
+      siteCount:    '',
+      ...(switchesToArch && !currentIsArch ? { toothNumbers: [] } : {}),
+      ...(!switchesToArch && currentIsArch ? { arch: '' } : {}),
+    });
+  };
 
   return (
     <div
@@ -347,88 +444,43 @@ const ItemCard = function ItemCard({
       className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-visible"
     >
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/60 rounded-t-2xl flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-700 tracking-wide uppercase">
-          Item {index + 1}
-        </h2>
+      <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/60 rounded-t-2xl flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <h2 className="text-sm font-semibold text-gray-700 tracking-wide uppercase shrink-0">
+            Restoration {index + 1}
+          </h2>
+          {subLabel && (
+            <span className="text-sm text-gray-400 truncate">{subLabel}</span>
+          )}
+        </div>
         {showRemove && (
           <button
             type="button"
             onClick={onRemove}
-            className="text-xs font-medium text-red-500 hover:text-red-700 transition-colors"
+            className="text-xs font-medium text-red-500 hover:text-red-700 transition-colors shrink-0"
           >
             Remove
           </button>
         )}
       </div>
 
-      <div className="px-6 py-5 space-y-4">
-        {/* Category + Product */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Category" required error={errors.category}>
-            <SearchableSelect
-              options={CATEGORIES}
-              value={item.category}
-              onChange={v => onUpdate({
-                category: v, product: '', qty: 1, unitType: 'per_tooth',
-                toothNumbers: [], arch: '',
-              })}
-              placeholder="Select category…"
-              hasError={!!errors.category}
-            />
-          </Field>
-          <Field label="Product" required error={errors.product}>
-            <SearchableSelect
-              options={products}
-              value={item.product}
-              onChange={v => onUpdate({
-                product: v,
-                unitType: getUnitType(v),
-                qty: 1, toothNumbers: [], arch: '',
-              })}
-              placeholder={item.category ? 'Select product…' : 'Select category first…'}
-              disabled={!item.category}
-              hasError={!!errors.product}
-            />
-          </Field>
-        </div>
+      <div className="px-6 py-5 space-y-5">
 
-        {/* Shade */}
-        {item.product && (
-          <Field label="Shade">
-            <input
-              type="text"
-              value={item.shade}
-              onChange={e => onUpdate({ shade: e.target.value })}
-              className={inp(false)}
-              placeholder="e.g. A2, B1 (optional)"
-            />
-          </Field>
-        )}
-
-        {/* Unit-type UI */}
-        {item.product && unitType === 'per_tooth' && (
-          <Field label="Tooth Numbers">
-            <div className="mt-1 overflow-x-auto">
-              <ToothSelector
-                selected={item.toothNumbers}
-                onChange={v => onUpdate({ toothNumbers: v })}
-              />
-            </div>
-          </Field>
-        )}
-
-        {item.product && unitType === 'per_arch' && (
-          <Field label="Arch">
+        {/* 1. Tooth / Arch selector */}
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-2">
+            {isFullArch ? 'Arch' : 'Tooth Selection'}
+          </p>
+          {isFullArch ? (
             <div className="flex gap-3 flex-wrap">
               {(['Upper', 'Lower', 'Both'] as const).map(a => (
                 <button
                   key={a}
                   type="button"
-                  onClick={() => onUpdate({ arch: a, qty: a === 'Both' ? 2 : 1 })}
+                  onClick={() => onUpdate({ arch: a })}
                   className={cn(
                     'px-5 py-2 rounded-lg border text-sm font-medium transition-colors',
-                    item.arch === a
+                    r.arch === a
                       ? 'bg-blue-600 text-white border-blue-600'
                       : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400',
                   )}
@@ -437,53 +489,130 @@ const ItemCard = function ItemCard({
                 </button>
               ))}
             </div>
-            {item.arch && (
-              <p className="text-xs text-gray-400 mt-1">
-                {item.arch} — {item.qty} {item.qty === 1 ? 'arch' : 'arches'}
-              </p>
-            )}
-          </Field>
-        )}
-
-        {item.product && unitType === 'per_unit' && (
-          <Field label="Quantity">
-            <div className="flex items-center gap-3">
-              <button type="button"
-                onClick={() => onUpdate({ qty: Math.max(1, item.qty - 1) })}
-                className="w-9 h-9 rounded-lg border border-gray-300 text-gray-600 text-lg font-medium hover:border-blue-400 hover:text-blue-600 transition-colors"
-              >−</button>
-              <span className="w-10 text-center text-sm font-semibold text-gray-900">{item.qty}</span>
-              <button type="button"
-                onClick={() => onUpdate({ qty: item.qty + 1 })}
-                className="w-9 h-9 rounded-lg border border-gray-300 text-gray-600 text-lg font-medium hover:border-blue-400 hover:text-blue-600 transition-colors"
-              >+</button>
-              <span className="text-sm text-gray-400">units</span>
+          ) : (
+            <div className="overflow-x-auto">
+              <ToothSelector
+                selected={r.toothNumbers}
+                onChange={v => onUpdate({ toothNumbers: v })}
+              />
             </div>
-          </Field>
-        )}
+          )}
+        </div>
 
-        {/* Implant notes */}
-        {item.product && isImplant && (
-          <Field label="Implant Notes">
-            <textarea
-              value={item.implantNotes}
-              onChange={e => onUpdate({ implantNotes: e.target.value })}
-              className={`${inp(false)} resize-none`}
-              rows={2}
-              placeholder="Implant system, platform size, connection type…"
+        {/* 2. Product dropdown */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Product" required error={errors.productType}>
+            <SearchableSelect
+              options={ALL_PRODUCT_LABELS}
+              value={r.productType}
+              onChange={selectProductType}
+              placeholder="Select product…"
+              hasError={!!errors.productType}
+            />
+          </Field>
+
+          {/* 3. Material dropdown */}
+          {r.productType && !pt?.noMaterial && materialOptions.length > 0 && (
+            <Field label="Material">
+              <SearchableSelect
+                options={materialOptions}
+                value={materialValue}
+                onChange={v => {
+                  const mat = (DISPLAY_TO_MATERIAL[v] ?? v) as Material;
+                  onUpdate({ material: mat, zirconiaTier: '' });
+                }}
+                placeholder="Select material…"
+              />
+            </Field>
+          )}
+        </div>
+
+        {/* 4. Sub-type dropdown (variants or site counts) */}
+        {r.productType && pt?.variants && (
+          <Field label="Sub-type" required error={errors.variant}>
+            <SearchableSelect
+              options={pt.variants}
+              value={r.variant}
+              onChange={v => onUpdate({ variant: v })}
+              placeholder="Select sub-type…"
+              hasError={!!errors.variant}
             />
           </Field>
         )}
+
+        {r.productType && pt?.siteCounts && (
+          <Field label="Implant Sites" required error={errors.siteCount}>
+            <SearchableSelect
+              options={pt.siteCounts}
+              value={r.siteCount}
+              onChange={s => onUpdate({ siteCount: s })}
+              placeholder="Select implant site count…"
+              hasError={!!errors.siteCount}
+            />
+          </Field>
+        )}
+
+        {/* 5. Zirconia Tier dropdown */}
+        {r.material === 'Zirconia' && (
+          <Field label="Zirconia Tier" required error={errors.zirconiaTier}>
+            <SearchableSelect
+              options={tiers}
+              value={r.zirconiaTier}
+              onChange={t => onUpdate({ zirconiaTier: t as ZirconiaTier })}
+              placeholder="Select tier…"
+              hasError={!!errors.zirconiaTier}
+            />
+          </Field>
+        )}
+
+        {/* 6. Implant details */}
+        {r.productType && pt?.isImplant && (
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2">Implant Details</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input
+                type="text"
+                value={r.implantSystem}
+                onChange={e => onUpdate({ implantSystem: e.target.value })}
+                className={inp(false)}
+                placeholder="Implant System"
+              />
+              <input
+                type="text"
+                value={r.implantPlatform}
+                onChange={e => onUpdate({ implantPlatform: e.target.value })}
+                className={inp(false)}
+                placeholder="Platform / Size"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* 7. Shade */}
+        {r.productType && !pt?.noMaterial && (
+          <Field label="Shade">
+            <input
+              type="text"
+              value={r.shade}
+              onChange={e => onUpdate({ shade: e.target.value })}
+              className={inp(false)}
+              placeholder="e.g. A2, B1 (optional)"
+            />
+          </Field>
+        )}
+
+
+
       </div>
     </div>
   );
-};
+}
 
 /* ── Shared UI helpers ── */
 
-function Card({ title, children, allowOverflow }: { title: string; children: React.ReactNode; allowOverflow?: boolean }) {
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className={cn('bg-white border border-gray-200 rounded-2xl shadow-sm', allowOverflow ? 'overflow-visible' : 'overflow-hidden')}>
+    <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/60 rounded-t-2xl">
         <h2 className="text-sm font-semibold text-gray-700 tracking-wide uppercase">{title}</h2>
       </div>
