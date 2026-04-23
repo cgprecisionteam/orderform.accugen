@@ -444,7 +444,7 @@ function RestorationCard({
       className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-visible"
     >
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/60 rounded-t-2xl flex items-center justify-between gap-3">
+      <div className="px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50/60 rounded-t-2xl flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <h2 className="text-sm font-semibold text-gray-700 tracking-wide uppercase shrink-0">
             Restoration {index + 1}
@@ -464,7 +464,7 @@ function RestorationCard({
         )}
       </div>
 
-      <div className="px-6 py-5 space-y-5">
+      <div className="px-4 sm:px-6 py-5 space-y-5">
 
         {/* 1. Tooth / Arch selector */}
         <div>
@@ -479,7 +479,7 @@ function RestorationCard({
                   type="button"
                   onClick={() => onUpdate({ arch: a })}
                   className={cn(
-                    'px-5 py-2 rounded-lg border text-sm font-medium transition-colors',
+                    'px-5 py-2 rounded-lg border text-sm font-medium transition-colors touch-manipulation',
                     r.arch === a
                       ? 'bg-blue-600 text-white border-blue-600'
                       : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400',
@@ -490,12 +490,10 @@ function RestorationCard({
               ))}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <ToothSelector
-                selected={r.toothNumbers}
-                onChange={v => onUpdate({ toothNumbers: v })}
-              />
-            </div>
+            <ToothSelector
+              selected={r.toothNumbers}
+              onChange={v => onUpdate({ toothNumbers: v })}
+            />
           )}
         </div>
 
@@ -613,10 +611,10 @@ function RestorationCard({
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/60 rounded-t-2xl">
+      <div className="px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50/60 rounded-t-2xl">
         <h2 className="text-sm font-semibold text-gray-700 tracking-wide uppercase">{title}</h2>
       </div>
-      <div className="px-6 py-5 space-y-4">{children}</div>
+      <div className="px-4 sm:px-6 py-5 space-y-4">{children}</div>
     </div>
   );
 }
