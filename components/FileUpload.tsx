@@ -12,7 +12,7 @@ const ALLOWED_TYPES = [
   'model/stl',
   'application/octet-stream', // .stl files often arrive as this
 ];
-const MAX_FILE_BYTES = 100 * 1024 * 1024;
+const MAX_FILE_BYTES = 64 * 1024 * 1024;   // must match uploadthing.ts maxFileSize
 const MAX_TOTAL_BYTES = 200 * 1024 * 1024;
 
 function formatBytes(bytes: number) {
@@ -61,7 +61,7 @@ export default function FileUpload({ files, onChange, error }: FileUploadProps) 
         return;
       }
       if (file.size > MAX_FILE_BYTES) {
-        setValidationError(`"${file.name}" exceeds 100 MB limit.`);
+        setValidationError(`"${file.name}" exceeds 64 MB limit.`);
         return;
       }
       toAdd.push(file);
@@ -95,7 +95,7 @@ export default function FileUpload({ files, onChange, error }: FileUploadProps) 
         <p className="text-sm text-gray-600">
           Drag & drop files here, or <span className="text-blue-600 font-medium">browse</span>
         </p>
-        <p className="text-xs text-gray-400 mt-1">Upload Files (STL, ZIP, Images) — max 100 MB per file, 200 MB total</p>
+        <p className="text-xs text-gray-400 mt-1">Upload Files (STL, ZIP, Images) — max 64 MB per file, 200 MB total</p>
         <input
           ref={inputRef}
           type="file"

@@ -99,8 +99,6 @@ export default function ScanRequestForm({ onStatusChange }: ScanRequestFormProps
     }
   };
 
-  const busy = stage === 'submitting';
-
   // Must be above any early return so hook count is stable across all renders
   useEffect(() => {
     const summary = form.clinicName
@@ -193,10 +191,10 @@ export default function ScanRequestForm({ onStatusChange }: ScanRequestFormProps
 function Card({ title, children, allowOverflow }: { title: string; children: React.ReactNode; allowOverflow?: boolean }) {
   return (
     <div className={cn('bg-white border border-gray-200 rounded-2xl shadow-sm', allowOverflow ? 'overflow-visible' : 'overflow-hidden')}>
-      <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/60 rounded-t-2xl">
+      <div className="px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50/60 rounded-t-2xl">
         <h2 className="text-sm font-semibold text-gray-700 tracking-wide uppercase">{title}</h2>
       </div>
-      <div className="px-6 py-5 space-y-4">{children}</div>
+      <div className="px-4 sm:px-6 py-5 space-y-4">{children}</div>
     </div>
   );
 }
