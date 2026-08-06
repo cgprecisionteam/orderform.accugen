@@ -65,9 +65,9 @@ export const PRODUCT_TYPES: ProductTypeConfig[] = [
 
   // ── Full Arch ─────────────────────────────────────────────────────────────
   { label: 'iBar (Implant Full Arch)',                    group: 'fullarch', unitType: 'per_arch', isImplant: true,
-    availableMaterials: ['Zirconia'] },
+    availableMaterials: ['Zirconia'], availableTiers: ['Economy Plus', 'Premium', 'Premium Plus'] },
   { label: 'Malo Framework + Crowns (Implant Full Arch)', group: 'fullarch', unitType: 'per_arch', isImplant: true,
-    availableMaterials: ['Zirconia'] },
+    availableMaterials: ['Zirconia'], availableTiers: ['Economy Plus', 'Premium', 'Premium Plus'] },
   { label: 'Immediate Implant Full Arch', group: 'fullarch', unitType: 'per_arch', isImplant: true,
     availableMaterials: ['PMMA'],
     variants: ['Standard', 'On Titanium Bar', 'With Ti Base'] },

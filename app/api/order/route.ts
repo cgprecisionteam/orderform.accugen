@@ -38,7 +38,7 @@ interface OrderBody {
   deliveryDate: string;
   isRush: boolean;
   requireTryIn: boolean;
-  dataType: 'scan' | 'pickup';
+  dataType: 'scan' | 'lab_scan' | 'pickup';
   files: OrderFile[];
 }
 
@@ -145,7 +145,17 @@ export async function POST(req: NextRequest) {
 
     const requestId = generateRequestId();
     const rushSuffix   = isRush ? ' (Rush)' : '';
-    const dataSuffix   = dataType === 'pickup' ? ' (Impression Pickup)' : ' (Digital Scan)';
+    const dataInputLabel = dataType === 'pickup'
+      ? 'Request Impression Pickup'
+      : dataType === 'lab_scan'
+        ? 'Accugen Digital Scan (Scanned by Accugen)'
+        : 'Upload Digital Scan (Clinic Scanner)';
+    const dataInputTag = dataType === 'pickup'
+      ? 'Impression Pickup'
+      : dataType === 'lab_scan'
+        ? 'Accugen Scan'
+        : 'Digital Scan';
+    const dataSuffix   = ` (${dataInputTag})`;
 
     const labSubject    = `New Order: ${clinicName} - Pt. ${patientName}${dataSuffix}${rushSuffix}`;
     const clientSubject = `New Order Received for Pt. ${patientName}${dataSuffix}${rushSuffix} — Accugen Digital Dental Lab`;
@@ -172,7 +182,7 @@ export async function POST(req: NextRequest) {
         ['Required By', deliveryDate],
         ['Rush',        isRush ? '<span style="color:#dc2626;font-weight:600;">Yes</span>' : 'No'],
         ['Try-in',      requireTryIn ? '<span style="color:#2563eb;font-weight:600;">Required</span>' : 'No'],
-        ['Data Input',  dataType === 'pickup' ? 'Impression Pickup' : 'Digital Scan'],
+        ['Data Input',  dataInputLabel],
       ])}
       ${itemsTable(items)}
       ${tableSection('Instructions', [['General Instructions', generalInstructions || '—']])}
@@ -187,7 +197,7 @@ export async function POST(req: NextRequest) {
         ['Required By', deliveryDate],
         ['Rush',        isRush ? '<span style="color:#dc2626;font-weight:600;">Yes</span>' : 'No'],
         ['Try-in',      requireTryIn ? '<span style="color:#2563eb;font-weight:600;">Required</span>' : 'No'],
-        ['Data Input',  dataType === 'pickup' ? 'Impression Pickup' : 'Digital Scan'],
+        ['Data Input',  dataInputLabel],
       ])}
       ${itemsTable(items)}
       <div style="margin-top:20px;padding:12px 14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:4px;font-size:13px;color:#0369a1;">

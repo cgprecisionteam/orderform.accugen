@@ -75,7 +75,7 @@ interface FormFields {
   deliveryDate: string;
   isRush: boolean;
   requireTryIn: boolean;
-  dataType: 'scan' | 'pickup';
+  dataType: 'scan' | 'lab_scan' | 'pickup';
 }
 
 const INITIAL_FORM: FormFields = {
@@ -96,9 +96,13 @@ type FormErrors = Partial<Record<keyof FormFields, string>>;
 
 interface RestError {
   productType?: string;
+  material?: string;
   zirconiaTier?: string;
   variant?: string;
   siteCount?: string;
+  implantSystem?: string;
+  implantPlatform?: string;
+  shade?: string;
 }
 
 interface OrderFormProps {
@@ -169,7 +173,13 @@ export default function OrderForm({ onStatusChange }: OrderFormProps) {
       const pt = PRODUCT_TYPES.find(p => p.label === r.productType);
       if (pt?.siteCounts && !r.siteCount) err.siteCount = 'Select implant site count.';
       if (pt?.variants && !r.variant) err.variant = 'Select a sub-type.';
+      if (!pt?.noMaterial && (pt?.availableMaterials?.length ?? 0) > 0 && !r.material) err.material = 'Select a material.';
       if (!pt?.noMaterial && r.material === 'Zirconia' && !r.zirconiaTier) err.zirconiaTier = 'Select a Zirconia tier.';
+      if (pt?.isImplant) {
+        if (!r.implantSystem.trim()) err.implantSystem = 'Implant system is required.';
+        if (!r.implantPlatform.trim()) err.implantPlatform = 'Platform / size is required.';
+      }
+      if (!pt?.noMaterial && !r.shade.trim()) err.shade = 'Shade is required.';
       return err;
     });
     setRestErrors(re);
@@ -305,24 +315,36 @@ export default function OrderForm({ onStatusChange }: OrderFormProps) {
           </button>
         </div>
 
-        {/* ── Data Input ── */}
-        <Card title="Data Input">
+        {/* ── Case Submission Method ── */}
+        <Card title="Case Submission Method">
           <div className="flex gap-2 mb-4">
-            {(['scan', 'pickup'] as const).map(dt => (
-              <button
-                key={dt}
-                type="button"
-                onClick={() => { setField('dataType', dt); if (dt === 'pickup') setFiles([]); }}
-                className={cn(
-                  'px-4 py-2 rounded-lg border text-sm font-medium transition-colors',
-                  form.dataType === dt
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400',
-                )}
-              >
-                {dt === 'scan' ? 'Digital Scan' : 'Request Impression Pickup'}
-              </button>
-            ))}
+            {(['scan', 'lab_scan', 'pickup'] as const).map(dt => {
+              const label    = dt === 'scan' ? 'Upload Digital Scan' : dt === 'lab_scan' ? 'Accugen Digital Scan' : 'Request Impression Pickup';
+              const subtitle = dt === 'scan' ? 'Clinic Scanner' : dt === 'lab_scan' ? 'Scanned by Accugen' : '';
+              return (
+                <button
+                  key={dt}
+                  type="button"
+                  onClick={() => { setField('dataType', dt); if (dt !== 'scan') setFiles([]); }}
+                  className={cn(
+                    'min-h-[56px] px-4 py-2 rounded-lg border text-sm font-medium transition-colors flex flex-col items-center justify-center gap-0.5',
+                    form.dataType === dt
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400',
+                  )}
+                >
+                  <span>{label}</span>
+                  {subtitle && (
+                    <span className={cn(
+                      'text-xs font-normal',
+                      form.dataType === dt ? 'text-blue-100' : 'text-gray-400',
+                    )}>
+                      {subtitle}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
           {form.dataType === 'scan' && (
             <>
@@ -511,7 +533,7 @@ function RestorationCard({
 
           {/* 3. Material dropdown */}
           {r.productType && !pt?.noMaterial && materialOptions.length > 0 && (
-            <Field label="Material">
+            <Field label="Material" required error={errors.material}>
               <SearchableSelect
                 options={materialOptions}
                 value={materialValue}
@@ -520,6 +542,7 @@ function RestorationCard({
                   onUpdate({ material: mat, zirconiaTier: '' });
                 }}
                 placeholder="Select material…"
+                hasError={!!errors.material}
               />
             </Field>
           )}
@@ -568,33 +591,37 @@ function RestorationCard({
           <div>
             <p className="text-sm font-medium text-gray-700 mb-2">Implant Details</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input
-                type="text"
-                value={r.implantSystem}
-                onChange={e => onUpdate({ implantSystem: e.target.value })}
-                className={inp(false)}
-                placeholder="Implant System"
-              />
-              <input
-                type="text"
-                value={r.implantPlatform}
-                onChange={e => onUpdate({ implantPlatform: e.target.value })}
-                className={inp(false)}
-                placeholder="Platform / Size"
-              />
+              <Field label="Implant System" required error={errors.implantSystem}>
+                <input
+                  type="text"
+                  value={r.implantSystem}
+                  onChange={e => onUpdate({ implantSystem: e.target.value })}
+                  className={inp(!!errors.implantSystem)}
+                  placeholder="Implant System"
+                />
+              </Field>
+              <Field label="Platform / Size" required error={errors.implantPlatform}>
+                <input
+                  type="text"
+                  value={r.implantPlatform}
+                  onChange={e => onUpdate({ implantPlatform: e.target.value })}
+                  className={inp(!!errors.implantPlatform)}
+                  placeholder="Platform / Size"
+                />
+              </Field>
             </div>
           </div>
         )}
 
         {/* 7. Shade */}
         {r.productType && !pt?.noMaterial && (
-          <Field label="Shade">
+          <Field label="Shade" required error={errors.shade}>
             <input
               type="text"
               value={r.shade}
               onChange={e => onUpdate({ shade: e.target.value })}
-              className={inp(false)}
-              placeholder="e.g. A2, B1 (optional)"
+              className={inp(!!errors.shade)}
+              placeholder="e.g. A2, B1"
             />
           </Field>
         )}

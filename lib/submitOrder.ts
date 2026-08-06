@@ -41,7 +41,7 @@ export interface OrderPayload {
   deliveryDate: string;
   isRush: boolean;
   requireTryIn: boolean;
-  dataType: 'scan' | 'pickup';
+  dataType: 'scan' | 'lab_scan' | 'pickup';
   files: File[];
 }
 
