@@ -27,7 +27,7 @@ export default function HomePage() {
       <Header />
 
       {/* Main content — pt-20 clears fixed header, pb-28 clears fixed footer */}
-      <main className="min-h-screen bg-gray-50 pt-20 pb-28">
+      <main className="min-h-screen bg-gray-50 pt-20 pb-[calc(7rem+env(safe-area-inset-bottom,0px))]">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
 
           {/* Page title */}
@@ -54,15 +54,16 @@ export default function HomePage() {
             </TabBtn>
           </div>
 
-          {tab === 'order' ? (
+          <div hidden={tab !== 'order'}>
             <OrderForm
               onStatusChange={(s, sum) => { setOrderStage(s); setOrderSummary(sum); }}
             />
-          ) : (
+          </div>
+          <div hidden={tab !== 'scan'}>
             <ScanRequestForm
               onStatusChange={(s, sum) => { setScanStage(s); setScanSummary(sum); }}
             />
-          )}
+          </div>
         </div>
       </main>
 

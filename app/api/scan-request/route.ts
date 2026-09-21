@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { isValidDate } from '@/lib/validation';
 
 const SENDER = 'Accugen Dental Lab <orders@accugendental.com>';
 const LAB_EMAIL = 'orders@accugendental.com';
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
   try {
     const apiKey = process.env.RESEND_API_KEY;
     console.log('[scan-request] RESEND_API_KEY present:', !!apiKey);
-    if (!apiKey) console.error('[scan-request] RESEND_API_KEY is not set');
+    if (!apiKey) return NextResponse.json({ success: false, error: 'Submission is temporarily unavailable. Please try again later.' }, { status: 503 });
 
     const resend = new Resend(apiKey);
     const body: ScanRequestBody = await req.json();
@@ -41,6 +42,8 @@ export async function POST(req: NextRequest) {
     if (!clinicName || !clinicEmail || !preferredDate || !preferredTime) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
     }
+
+    if (!isValidDate(preferredDate)) return NextResponse.json({ success: false, error: 'Select today or a future date.' }, { status: 400 });
 
     const labSubject = `New Scan Request — ${clinicName}`;
     const clientSubject = 'New Scan Request Received';
@@ -109,16 +112,18 @@ export async function POST(req: NextRequest) {
     try {
       console.log('[scan-request] Sending lab email to', LAB_EMAIL);
       const result = await resend.emails.send({ from: SENDER, to: LAB_EMAIL, reply_to: clinicEmail, subject: labSubject, html: labHtml });
-      console.log('[scan-request] Lab email result:', JSON.stringify(result));
+      if (result.error || !result.data?.id) throw new Error(result.error?.message || 'Email service did not accept the message.');
     } catch (err: unknown) {
       labEmailError = err instanceof Error ? err.message : String(err);
       console.error('[scan-request] Lab email FAILED:', labEmailError);
     }
 
+    if (labEmailError) return NextResponse.json({ success: false, error: 'The lab notification could not be sent. Your form has been kept; please try again.' }, { status: 502 });
+
     try {
       console.log('[scan-request] Sending client email to', clinicEmail);
       const result = await resend.emails.send({ from: SENDER, to: clinicEmail, subject: clientSubject, html: clientHtml });
-      console.log('[scan-request] Client email result:', JSON.stringify(result));
+      if (result.error || !result.data?.id) throw new Error(result.error?.message || 'Email service did not accept the message.');
     } catch (err: unknown) {
       clientEmailError = err instanceof Error ? err.message : String(err);
       console.error('[scan-request] Client email FAILED:', clientEmailError);
@@ -127,8 +132,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       emailStatus: {
-        lab:    labEmailError    ? `failed: ${labEmailError}`    : 'sent',
-        client: clientEmailError ? `failed: ${clientEmailError}` : 'sent',
+        lab:    'sent',
+        client: clientEmailError ? 'failed' : 'sent',
       },
     });
   } catch (err) {

@@ -22,8 +22,16 @@
 
 export type UnitType = 'per_tooth' | 'per_arch' | 'per_unit';
 export type Material = 'Zirconia' | 'Lithium Disilicate' | 'PMMA' | 'G-CAM';
+export const MATERIAL_DISPLAY: Partial<Record<Material, string>> = {
+  'Lithium Disilicate': 'Lithium Disilicate (e.max)',
+  PMMA: 'PMMA(Temporary)',
+};
+
+export function getMaterialDisplay(material: string): string {
+  return MATERIAL_DISPLAY[material as Material] ?? material;
+}
 export type ZirconiaTier = 'Economy' | 'Economy Plus' | 'Premium' | 'Premium Plus';
-export type RestGroup = 'restoration' | 'implant' | 'fullarch';
+export type RestGroup = 'restoration' | 'implant' | 'fullarch' | 'ortho';
 
 export interface ProductTypeConfig {
   label: string;
@@ -43,6 +51,12 @@ export interface ProductTypeConfig {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const PRODUCT_TYPES: ProductTypeConfig[] = [
+
+  // ── Orthodontic appliances ────────────────────────────────────────────────
+  { label: 'Ortho (Night Guard)', group: 'ortho', unitType: 'per_arch', isImplant: false,
+    noMaterial: true, availableMaterials: [] },
+  { label: 'Ortho (Essix Retainer)', group: 'ortho', unitType: 'per_arch', isImplant: false,
+    noMaterial: true, availableMaterials: [] },
 
   // ── Restorations ──────────────────────────────────────────────────────────
   { label: 'Full Crown',   group: 'restoration', unitType: 'per_tooth', isImplant: false,
@@ -100,9 +114,9 @@ export function resolveProductName(
   }
 
   if (productType === 'Immediate Implant Full Arch') {
-    if (variant === 'On Titanium Bar') return 'Immediate Implant Full Arch | PMMA on Titanium Bar';
-    if (variant === 'With Ti Base')    return 'Immediate Implant Full Arch | PMMA with Ti Base';
-    return 'Immediate Implant Full Arch | PMMA';
+    if (variant === 'On Titanium Bar') return 'Immediate Implant Full Arch | PMMA(Temporary) on Titanium Bar';
+    if (variant === 'With Ti Base')    return 'Immediate Implant Full Arch | PMMA(Temporary) with Ti Base';
+    return 'Immediate Implant Full Arch | PMMA(Temporary)';
   }
 
   if (productType === 'Milled Titanium Bar') {
@@ -115,18 +129,20 @@ export function resolveProductName(
 
   if (productType === 'Implant Crown + Custom Abutment') {
     if (material === 'Zirconia') return `Implant Crown + Custom Abutment | Zr ${tier}`;
-    return `Implant Crown + Custom Abutment | ${material}`;
+    return `Implant Crown + Custom Abutment | ${getMaterialDisplay(material)}`;
   }
 
   // Standard pattern applies to all remaining products
   if (material === 'Zirconia')           return `${productType} | Zirconia ${tier}`;
   if (material === 'Lithium Disilicate') return `${productType} | IPS e.max CAD`;
-  return `${productType} | ${material}`;
+  return material ? `${productType} | ${getMaterialDisplay(material)}` : productType;
 }
 
 /** Maps a product label to the legacy catalogue category string (used in email). */
 export function getRestorationCategory(productType: string): string {
   switch (productType) {
+    case 'Ortho (Night Guard)':
+    case 'Ortho (Essix Retainer)':          return 'Ortho';
     case 'Inlay/Onlay':                    return 'Inlay/Onlay';
     case 'Veneer':                         return 'Veneers';
     case 'Implant Crown + Custom Abutment': return 'Implant Crown + Custom Abutment';

@@ -2,15 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import SearchableSelect from './SearchableSelect';
+import SubmitBar from './SubmitBar';
 import { cn } from '@/lib/utils';
+import { labDate, isValidDate } from '@/lib/validation';
 
 function isValidEmail(e: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 }
 
-function todayStr(): string {
-  return new Date().toISOString().split('T')[0];
-}
 
 const TIME_SLOTS = [
   '10:00 AM – 10:30 AM',
@@ -63,6 +62,8 @@ export default function ScanRequestForm({ onStatusChange }: ScanRequestFormProps
   const [form, setForm] = useState<FormState>(INITIAL);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [stage, setStage] = useState<Stage>('idle');
+  const [confirmationSent, setConfirmationSent] = useState(true);
+  const [submitError, setSubmitError] = useState('');
 
   const set = <K extends keyof FormState>(k: K, v: string) => {
     setForm((prev) => ({ ...prev, [k]: v }));
@@ -74,7 +75,7 @@ export default function ScanRequestForm({ onStatusChange }: ScanRequestFormProps
     if (!form.clinicName.trim()) e.clinicName = 'Clinic name is required.';
     if (!form.clinicEmail.trim()) e.clinicEmail = 'Email is required.';
     else if (!isValidEmail(form.clinicEmail)) e.clinicEmail = 'Enter a valid email address.';
-    if (!form.preferredDate) e.preferredDate = 'Select a preferred date.';
+    if (!isValidDate(form.preferredDate)) e.preferredDate = 'Select today or a future date.';
     if (!form.preferredTime) e.preferredTime = 'Select a preferred time.';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -82,7 +83,9 @@ export default function ScanRequestForm({ onStatusChange }: ScanRequestFormProps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (stage === 'submitting') return;
     if (!validate()) return;
+    setSubmitError('');
     setStage('submitting');
     try {
       const res = await fetch('/api/scan-request', {
@@ -90,11 +93,14 @@ export default function ScanRequestForm({ onStatusChange }: ScanRequestFormProps
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      if (!res.ok) throw new Error(await res.text());
+      const result = await res.json();
+      if (!res.ok || !result.success) throw new Error(result.error || 'Submission failed. Please try again.');
+      setConfirmationSent(result.emailStatus.client === 'sent');
       setStage('done');
       setForm(INITIAL);
     } catch (err) {
       console.error(err);
+      setSubmitError(err instanceof Error ? err.message : 'Submission failed. Please try again.');
       setStage('error');
     }
   };
@@ -118,7 +124,7 @@ export default function ScanRequestForm({ onStatusChange }: ScanRequestFormProps
         </div>
         <h2 className="text-xl font-semibold text-gray-900 mb-2">Scan Request Sent</h2>
         <p className="text-gray-400 text-sm mb-8">
-          We have received your request. Our team will confirm your slot shortly.
+          {confirmationSent ? 'We have received your request. Our team will confirm your slot shortly.' : 'Your request was sent to the lab, but the confirmation email could not be sent. Please do not submit again; contact the lab if needed.'}
         </p>
         <button
           onClick={() => setStage('idle')}
@@ -136,7 +142,7 @@ export default function ScanRequestForm({ onStatusChange }: ScanRequestFormProps
 
         {stage === 'error' && (
           <div className="bg-red-50 border border-red-200 rounded-2xl px-5 py-4 text-sm text-red-700">
-            Submission failed. Please check your connection and try again.
+            {submitError || 'Submission failed. Please check your connection and try again.'}
           </div>
         )}
 
@@ -166,7 +172,7 @@ export default function ScanRequestForm({ onStatusChange }: ScanRequestFormProps
         <Card title="Preferred Appointment" allowOverflow>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Preferred Date" required error={errors.preferredDate}>
-              <input type="date" value={form.preferredDate} min={todayStr()}
+              <input type="date" value={form.preferredDate} min={labDate()}
                 onChange={(e) => set('preferredDate', e.target.value)}
                 className={inp(!!errors.preferredDate)} />
             </Field>
@@ -182,7 +188,12 @@ export default function ScanRequestForm({ onStatusChange }: ScanRequestFormProps
           </div>
         </Card>
 
-        <div className="h-4" />
+        <SubmitBar
+          placement="inline"
+          label="Request Scan"
+          stage={stage}
+          formId="scan-form"
+        />
       </div>
     </form>
   );
@@ -218,4 +229,3 @@ function inp(hasError: boolean) {
     hasError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 hover:border-gray-400'
   );
 }
-

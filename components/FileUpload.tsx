@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { MAX_FILES, MAX_FILE_BYTES, uploadError } from '@/lib/validation';
 
 const ALLOWED_EXT = ['.stl', '.zip', '.jpg', '.jpeg', '.png', '.pdf'];
 const ALLOWED_TYPES = [
@@ -12,8 +13,6 @@ const ALLOWED_TYPES = [
   'model/stl',
   'application/octet-stream', // .stl files often arrive as this
 ];
-const MAX_FILE_BYTES = 64 * 1024 * 1024;   // must match uploadthing.ts maxFileSize
-const MAX_TOTAL_BYTES = 200 * 1024 * 1024;
 
 function formatBytes(bytes: number) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -68,8 +67,9 @@ export default function FileUpload({ files, onChange, error }: FileUploadProps) 
     }
 
     const merged = [...files, ...toAdd];
-    if (merged.reduce((sum, f) => sum + f.size, 0) > MAX_TOTAL_BYTES) {
-      setValidationError('Total upload size exceeds 200 MB limit.');
+    const message = uploadError(merged);
+    if (message) {
+      setValidationError(message);
       return;
     }
     onChange(merged);
@@ -95,14 +95,14 @@ export default function FileUpload({ files, onChange, error }: FileUploadProps) 
         <p className="text-sm text-gray-600">
           Drag & drop files here, or <span className="text-blue-600 font-medium">browse</span>
         </p>
-        <p className="text-xs text-gray-400 mt-1">Upload Files (STL, ZIP, Images) — max 64 MB per file, 200 MB total</p>
+        <p className="text-xs text-gray-400 mt-1">Upload Files (STL, ZIP, Images) — max {MAX_FILES} files, 64 MB per file, 200 MB total</p>
         <input
           ref={inputRef}
           type="file"
           multiple
           accept=".stl,.zip,.jpg,.jpeg,.png,.pdf"
           className="hidden"
-          onChange={(e) => addFiles(e.target.files)}
+          onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }}
         />
       </div>
 

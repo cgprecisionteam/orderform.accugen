@@ -4,36 +4,27 @@ import { useState, useEffect, useRef } from 'react';
 import ToothSelector from './ToothSelector';
 import FileUpload from './FileUpload';
 import SearchableSelect from './SearchableSelect';
+import SubmitBar from './SubmitBar';
 import {
   PRODUCT_TYPES, ProductTypeConfig,
   Material, ZirconiaTier,
+  MATERIAL_DISPLAY, getMaterialDisplay,
 } from '@/lib/products';
 import { submitOrder, Restoration } from '@/lib/submitOrder';
 import { cn } from '@/lib/utils';
+import { labDate, isValidDate, locationError, uploadError } from '@/lib/validation';
 
 /* ── Constants ── */
 
 const ALL_TIERS: ZirconiaTier[] = ['Economy', 'Economy Plus', 'Premium', 'Premium Plus'];
 const ALL_PRODUCT_LABELS = PRODUCT_TYPES.map(p => p.label);
 
-const MATERIAL_DISPLAY: Partial<Record<Material, string>> = {
-  'Lithium Disilicate': 'Lithium Disilicate (e.max)',
-};
 const DISPLAY_TO_MATERIAL: Record<string, Material> = {
   'Lithium Disilicate (e.max)': 'Lithium Disilicate',
+  'PMMA(Temporary)': 'PMMA',
 };
 
 /* ── Helpers ── */
-
-function defaultDeliveryDate(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().split('T')[0];
-}
-
-function todayStr(): string {
-  return new Date().toISOString().split('T')[0];
-}
 
 function isValidEmail(e: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
@@ -57,7 +48,7 @@ function getSubLabel(r: Restoration): string {
       ? `Teeth ${r.toothNumbers.slice(0, 3).join(', ')}${r.toothNumbers.length > 3 ? '…' : ''}`
       : '';
   const prod = r.productType
-    ? r.material ? `${r.material} ${r.productType}` : r.productType
+    ? r.material ? `${getMaterialDisplay(r.material)} ${r.productType}` : r.productType
     : '';
   if (loc && prod) return `${loc} – ${prod}`;
   return loc || prod;
@@ -85,7 +76,7 @@ const INITIAL_FORM: FormFields = {
   contactNumber: '',
   patientName: '',
   generalInstructions: '',
-  deliveryDate: defaultDeliveryDate(),
+  deliveryDate: labDate(1),
   isRush: false,
   requireTryIn: false,
   dataType: 'scan',
@@ -95,6 +86,8 @@ type Stage = 'idle' | 'uploading' | 'submitting' | 'done' | 'error';
 type FormErrors = Partial<Record<keyof FormFields, string>>;
 
 interface RestError {
+  arch?: string;
+  toothNumbers?: string;
   productType?: string;
   material?: string;
   zirconiaTier?: string;
@@ -112,13 +105,15 @@ interface OrderFormProps {
 /* ── Component ── */
 
 export default function OrderForm({ onStatusChange }: OrderFormProps) {
-  const [form, setForm] = useState<FormFields>(INITIAL_FORM);
+  const [form, setForm] = useState<FormFields>(() => ({ ...INITIAL_FORM, deliveryDate: labDate(1) }));
   const [restorations, setRestorations] = useState<Restoration[]>([newRestoration()]);
   const [files, setFiles] = useState<File[]>([]);
   const [errors, setErrors] = useState<FormErrors>({});
   const [restErrors, setRestErrors] = useState<RestError[]>([{}]);
   const [stage, setStage] = useState<Stage>('idle');
   const [successId, setSuccessId] = useState('');
+  const [confirmationSent, setConfirmationSent] = useState(true);
+  const [submitError, setSubmitError] = useState('');
   const lastCardRef = useRef<HTMLDivElement>(null);
 
   const setField = <K extends keyof FormFields>(k: K, v: FormFields[K]) => {
@@ -164,13 +159,18 @@ export default function OrderForm({ onStatusChange }: OrderFormProps) {
     if (!form.email.trim()) e.email = 'Email is required.';
     else if (!isValidEmail(form.email)) e.email = 'Enter a valid email address.';
     if (!form.patientName.trim()) e.patientName = 'Patient name is required.';
-    if (!form.deliveryDate) e.deliveryDate = 'Select a delivery date.';
+    if (!isValidDate(form.deliveryDate)) e.deliveryDate = 'Select today or a future date.';
     setErrors(e);
 
     const re: RestError[] = restorations.map(r => {
       const err: RestError = {};
       if (!r.productType) { err.productType = 'Select a restoration type.'; return err; }
       const pt = PRODUCT_TYPES.find(p => p.label === r.productType);
+      const location = locationError(r);
+      if (location) {
+        if (pt?.unitType === 'per_arch') err.arch = location;
+        else err.toothNumbers = location;
+      }
       if (pt?.siteCounts && !r.siteCount) err.siteCount = 'Select implant site count.';
       if (pt?.variants && !r.variant) err.variant = 'Select a sub-type.';
       if (!pt?.noMaterial && (pt?.availableMaterials?.length ?? 0) > 0 && !r.material) err.material = 'Select a material.';
@@ -191,20 +191,26 @@ export default function OrderForm({ onStatusChange }: OrderFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (stage === 'uploading' || stage === 'submitting') return;
     if (!validate()) return;
+    const fileError = uploadError(files);
+    if (fileError) { setSubmitError(fileError); setStage('error'); return; }
+    setSubmitError('');
     try {
       setStage(files.length > 0 ? 'uploading' : 'submitting');
-      const requestId = await submitOrder(
+      const result = await submitOrder(
         { ...form, restorations, files },
         () => setStage('submitting'),
       );
-      setSuccessId(requestId);
+      setSuccessId(result.requestId);
+      setConfirmationSent(result.emailStatus.client === 'sent');
       setStage('done');
-      setForm(INITIAL_FORM);
+      setForm({ ...INITIAL_FORM, deliveryDate: labDate(1) });
       setRestorations([newRestoration()]);
       setFiles([]);
     } catch (err) {
       console.error(err);
+      setSubmitError(err instanceof Error ? err.message : 'Submission failed. Please try again.');
       setStage('error');
     }
   };
@@ -236,7 +242,7 @@ export default function OrderForm({ onStatusChange }: OrderFormProps) {
         <div className="inline-block bg-blue-50 border border-blue-200 rounded-xl px-6 py-3 text-blue-700 font-mono text-xl font-bold tracking-widest mb-6">
           {successId}
         </div>
-        <p className="text-gray-400 text-sm mb-8">A confirmation email has been sent to your clinic.</p>
+        <p className="text-gray-400 text-sm mb-8">{confirmationSent ? 'A confirmation email has been sent to your clinic.' : 'Your order was sent to the lab, but the confirmation email could not be sent. Please do not submit again; contact the lab if needed.'}</p>
         <button
           onClick={() => { setStage('idle'); setSuccessId(''); }}
           className="bg-blue-600 text-white px-7 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
@@ -255,7 +261,7 @@ export default function OrderForm({ onStatusChange }: OrderFormProps) {
 
         {stage === 'error' && (
           <div className="bg-red-50 border border-red-200 rounded-2xl px-5 py-4 text-sm text-red-700">
-            Submission failed. Please check your connection and try again.
+            {submitError || 'Submission failed. Please check your connection and try again.'}
           </div>
         )}
 
@@ -371,7 +377,7 @@ export default function OrderForm({ onStatusChange }: OrderFormProps) {
         <Card title="Delivery">
           <div className="flex flex-col sm:flex-row gap-5 items-start sm:items-end">
             <Field label="Required By" required error={errors.deliveryDate}>
-              <input type="date" value={form.deliveryDate} min={todayStr()}
+              <input type="date" value={form.deliveryDate} min={labDate()}
                 onChange={e => setField('deliveryDate', e.target.value)}
                 className={`${inp(!!errors.deliveryDate)} w-48`} />
             </Field>
@@ -416,7 +422,14 @@ export default function OrderForm({ onStatusChange }: OrderFormProps) {
           </div>
         </Card>
 
-        <div className="h-4" />
+        <SubmitBar
+          placement="inline"
+          label="Submit Order"
+          stage={stage}
+          formId="order-form"
+          submittingLabel="Submitting order…"
+          summary={summary}
+        />
       </div>
     </form>
   );
@@ -455,6 +468,8 @@ function RestorationCard({
       zirconiaTier: '',
       variant:      '',
       siteCount:    '',
+      ...(newPt?.noMaterial ? { shade: '' } : {}),
+      ...(!newPt?.isImplant ? { implantSystem: '', implantPlatform: '' } : {}),
       ...(switchesToArch && !currentIsArch ? { toothNumbers: [] } : {}),
       ...(!switchesToArch && currentIsArch ? { arch: '' } : {}),
     });
@@ -499,6 +514,7 @@ function RestorationCard({
                 <button
                   key={a}
                   type="button"
+                  aria-pressed={r.arch === a}
                   onClick={() => onUpdate({ arch: a })}
                   className={cn(
                     'px-5 py-2 rounded-lg border text-sm font-medium transition-colors touch-manipulation',
@@ -517,6 +533,8 @@ function RestorationCard({
               onChange={v => onUpdate({ toothNumbers: v })}
             />
           )}
+          {errors.toothNumbers && <p className="mt-1 text-xs text-red-500">{errors.toothNumbers}</p>}
+          {errors.arch && <p className="mt-1 text-xs text-red-500">{errors.arch}</p>}
         </div>
 
         {/* 2. Product dropdown */}

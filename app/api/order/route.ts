@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { isValidDate, locationError, uploadError } from '@/lib/validation';
 import { generateRequestId } from '@/lib/counter';
+import { getMaterialDisplay } from '@/lib/products';
 
 const SENDER = 'Accugen Dental Lab <orders@accugendental.com>';
 const LAB_EMAIL = 'orders@accugendental.com';
@@ -83,7 +85,7 @@ function itemsTable(items: OrderItem[]): string {
 
   function materialDisplay(item: OrderItem): string {
     if (!item.material) return '—';
-    return item.material === 'Lithium Disilicate' ? 'Lithium Disilicate (e.max)' : item.material;
+    return getMaterialDisplay(item.material);
   }
 
   function tierDisplay(item: OrderItem): string {
@@ -123,9 +125,7 @@ export async function POST(req: NextRequest) {
     // ── Env guard ──
     const apiKey = process.env.RESEND_API_KEY;
     console.log('[order] RESEND_API_KEY present:', !!apiKey);
-    if (!apiKey) {
-      console.error('[order] RESEND_API_KEY is not set — emails will not send');
-    }
+    if (!apiKey) return NextResponse.json({ success: false, error: 'Submission is temporarily unavailable. Please try again later.' }, { status: 503 });
 
     const resend = new Resend(apiKey);
     const body: OrderBody = await req.json();
@@ -142,6 +142,11 @@ export async function POST(req: NextRequest) {
     if (!items || items.length === 0) {
       return NextResponse.json({ success: false, error: 'No items provided' }, { status: 400 });
     }
+
+    if (!isValidDate(deliveryDate)) return NextResponse.json({ success: false, error: 'Select today or a future date.' }, { status: 400 });
+
+    if (!Array.isArray(items) || items.some(item => !item || locationError(item))) return NextResponse.json({ success: false, error: 'Each product requires a valid tooth or arch selection.' }, { status: 400 });
+    if (!Array.isArray(files) || files.some(file => !file) || uploadError(files)) return NextResponse.json({ success: false, error: 'Invalid uploads: maximum 20 files, 64 MB each, 200 MB total.' }, { status: 400 });
 
     const requestId = generateRequestId();
     const rushSuffix   = isRush ? ' (Rush)' : '';
@@ -217,11 +222,13 @@ export async function POST(req: NextRequest) {
         subject: labSubject,
         html: wrap('New Order Received', labBody),
       });
-      console.log('[order] Lab email result:', JSON.stringify(result));
+      if (result.error || !result.data?.id) throw new Error(result.error?.message || 'Email service did not accept the message.');
     } catch (err: unknown) {
       labEmailError = err instanceof Error ? err.message : String(err);
       console.error('[order] Lab email FAILED:', labEmailError);
     }
+
+    if (labEmailError) return NextResponse.json({ success: false, error: 'The lab notification could not be sent. Your form has been kept; please try again.' }, { status: 502 });
 
     try {
       console.log('[order] Sending client email to', email);
@@ -230,20 +237,19 @@ export async function POST(req: NextRequest) {
         subject: clientSubject,
         html: wrap('New Order Received', clientBody),
       });
-      console.log('[order] Client email result:', JSON.stringify(result));
+      if (result.error || !result.data?.id) throw new Error(result.error?.message || 'Email service did not accept the message.');
     } catch (err: unknown) {
       clientEmailError = err instanceof Error ? err.message : String(err);
       console.error('[order] Client email FAILED:', clientEmailError);
     }
 
-    // Always return success so the order is not lost even if emails fail.
-    // Email errors are visible in Vercel function logs.
+    // Success requires the email provider to accept the lab notification.
     return NextResponse.json({
       success: true,
       requestId,
       emailStatus: {
-        lab:    labEmailError    ? `failed: ${labEmailError}`    : 'sent',
-        client: clientEmailError ? `failed: ${clientEmailError}` : 'sent',
+        lab:    'sent',
+        client: clientEmailError ? 'failed' : 'sent',
       },
     });
 

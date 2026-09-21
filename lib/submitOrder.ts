@@ -1,4 +1,5 @@
 import { uploadFiles } from './uploadthing-client';
+import { uploadError } from './validation';
 import {
   Material, ZirconiaTier,
   PRODUCT_TYPES, resolveProductName, getRestorationCategory,
@@ -76,7 +77,9 @@ function buildApiItem(r: Restoration) {
 export async function submitOrder(
   payload: OrderPayload,
   onUploaded?: () => void,
-): Promise<string> {
+): Promise<{ requestId: string; emailStatus: { client: string } }> {
+  const error = uploadError(payload.files);
+  if (error) throw new Error(error);
   // Step 1 — Upload files
   let uploadedFiles: UploadedFile[] = [];
   if (payload.files.length > 0) {
@@ -106,11 +109,9 @@ export async function submitOrder(
     }),
   });
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Order submission failed: ${text}`);
+  const json = await response.json();
+  if (!response.ok || !json.success) {
+    throw new Error(json.error || 'Order submission failed. Please try again.');
   }
-
-  const json = (await response.json()) as { success: boolean; requestId: string };
-  return json.requestId;
+  return json;
 }

@@ -237,7 +237,7 @@ maps each combination to the canonical name string. Examples:
 1. Validates required fields (`clinicName`, `email`, `patientName`, `deliveryDate`, `items`)
 2. Generates `requestId` via `generateRequestId()`
 3. Sends two emails (lab + client) via Resend — each in independent try/catch
-4. Always returns `{ success: true, requestId, emailStatus }` — email failures are logged, not surfaced to user
+4. Returns success only after the email provider accepts the lab notification. Lab failures return 502 and preserve the form; customer confirmation failures return success with a visible warning.
 
 ---
 
@@ -272,8 +272,7 @@ File attachments appear as download links (UploadThing URL with `?download=1`).
 
 ### Email failure handling
 
-Both sends are wrapped in independent try/catch. If an email fails, the API still returns
-`success: true` so the order is not lost. Check Vercel function logs (`[order]` prefix) for details.
+Both routes check returned SDK errors as well as thrown exceptions. A rejected lab notification returns 502 before attempting customer confirmation. If only customer confirmation fails, the submitted state displays a warning instead of encouraging a duplicate order. Provider acceptance does not guarantee inbox delivery; there is still no database persistence.
 
 ---
 
@@ -319,3 +318,10 @@ for `onStatusChange` is placed above it.
 - `package-lock.json` still references `@radix-ui/react-label`, `@radix-ui/react-select`,
   and `class-variance-authority` (removed from `package.json`). Run `npm install` to
   prune the lock file.
+
+## Form reliability checks
+
+- Both tabs stay mounted while hidden, preserving in-memory drafts and upload selections.
+- `lib/validation.ts` shares lab-timezone dates (Asia/Kolkata), tooth/arch validation, and upload limits between browser and server.
+- Uploads allow at most 20 files total, 64 MB each, and 200 MB combined; UploadThing middleware checks the batch too.
+- Run `npm test` for mocked email failure and validation regression checks; no real emails are sent.
