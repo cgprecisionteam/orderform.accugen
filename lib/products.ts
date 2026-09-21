@@ -52,12 +52,6 @@ export interface ProductTypeConfig {
 
 export const PRODUCT_TYPES: ProductTypeConfig[] = [
 
-  // ── Orthodontic appliances ────────────────────────────────────────────────
-  { label: 'Ortho (Night Guard)', group: 'ortho', unitType: 'per_arch', isImplant: false,
-    noMaterial: true, availableMaterials: [] },
-  { label: 'Ortho (Essix Retainer)', group: 'ortho', unitType: 'per_arch', isImplant: false,
-    noMaterial: true, availableMaterials: [] },
-
   // ── Restorations ──────────────────────────────────────────────────────────
   { label: 'Full Crown',   group: 'restoration', unitType: 'per_tooth', isImplant: false,
     availableMaterials: ['Zirconia', 'Lithium Disilicate', 'PMMA', 'G-CAM'] },
@@ -91,6 +85,12 @@ export const PRODUCT_TYPES: ProductTypeConfig[] = [
   { label: 'Milled Malo Framework',      group: 'fullarch', unitType: 'per_arch', isImplant: true,
     noMaterial: true, availableMaterials: [],
     siteCounts: ['2 Implant Sites', '3 Implant Sites', '4-6 Implant Sites', '7+ Implant Sites'] },
+
+  // ── Orthodontic appliances ────────────────────────────────────────────────
+  { label: 'Ortho (Night Guard)', group: 'ortho', unitType: 'per_arch', isImplant: false,
+    noMaterial: true, availableMaterials: [] },
+  { label: 'Ortho (Essix Retainer)', group: 'ortho', unitType: 'per_arch', isImplant: false,
+    noMaterial: true, availableMaterials: [] },
 
 ];
 
